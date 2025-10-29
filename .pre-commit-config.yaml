@@ -1,0 +1,38 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+    - id: trailing-whitespace
+    - id: check-added-large-files
+      args: ['--maxkb=1500']
+    - id: check-case-conflict
+    - id: check-executables-have-shebangs
+    - id: check-merge-conflict
+    - id: check-toml
+    - id: detect-private-key
+    - id: end-of-file-fixer
+      exclude_types: [plain-text]
+    - id: name-tests-test
+      args: ['--pytest-test-first']
+  - repo: local
+    hooks:
+    - id: pytest
+      name: pytest
+      entry: poetry run python3 -m pytest -x tests/
+      pass_filenames: false
+      language: system
+      types: [python]
+    - id: ruff-lint
+      name: ruff-lint
+      entry: ruff check
+      language: system
+      types_or: [ python, pyi, jupyter]
+      args: [ --fix, --select, "I,F401" ]
+    - id: ruff-format
+      name: ruff-format
+      entry: poetry run ruff format .
+      # No directories are passed to ruff in the entry because all staged files
+      # are passed automatically due to the following default config value:
+      # pass_filenames: true
+      language: system
+      types_or: [ python, pyi, jupyter]
