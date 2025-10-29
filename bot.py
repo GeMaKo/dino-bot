@@ -213,7 +213,6 @@ class CollectorBot:
         self.recent_positions.append(bot_pos)
         if len(self.recent_positions) > 5:
             self.recent_positions.pop(0)
-        print(f"Recent positions: {self.recent_positions}", file=sys.stderr)
         # Check for visible gems
         gems = data.get("visible_gems", [])
         if not gems:
