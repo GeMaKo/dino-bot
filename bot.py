@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import json
-from pathfinding import find_path, manhattan
+from pathfinding import find_path, manhattan, bfs
 from config import Direction
 
 
@@ -44,6 +44,7 @@ class CollectorBot:
         self.width: int | None = None
         self.height: int | None = None
         self.walls: set[tuple[int, int]] | None = None
+        self.recent_positions: list[tuple[int, int]] = []
 
     def get_path_to_closest_top3_gem(
         self, bot_pos: tuple[int, int], gems: list[dict]
@@ -124,6 +125,53 @@ class CollectorBot:
             return next_pos
         return bot_pos
 
+    def search_gems(self, game_state: dict) -> tuple[int, int]:
+        bot_pos = tuple(game_state["bot"])
+        if self.width is None or self.height is None or self.walls is None:
+            raise ValueError(
+                "Map width, height, and walls must be initialized before pathfinding."
+            )
+
+        def is_goal(pos, path):
+            """
+            Determine if a position is a valid goal for exploration.
+
+            The goal is any position that:
+            - Is not the bot's current position,
+            - Is not a wall,
+            - Has not been visited recently.
+
+            Parameters
+            ----------
+            pos : tuple[int, int]
+                The position to check.
+            path : list[tuple[int, int]]
+                The current path taken (unused in this check).
+
+            Returns
+            -------
+            bool
+                True if the position is a valid goal, False otherwise.
+            """
+            return (
+                pos != bot_pos
+                and pos not in self.walls
+                and pos not in self.recent_positions
+            )
+
+        path = bfs(
+            bot_pos,
+            is_goal=is_goal,
+            walls=self.walls,
+            width=self.width,
+            height=self.height,
+            directions=[Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT],
+        )
+        # Return the next step in the path, if available
+        if path and len(path) > 1:
+            return path[1]
+        return bot_pos
+
     def process_input(self, line: str, first_tick: bool = False) -> str:
         """
         Process a single line of input and determine the next move.
@@ -160,7 +208,17 @@ class CollectorBot:
             )
         # Use pathfinding to determine next move
         bot_pos = tuple(data.get("bot"))
-        next_pos = self.navigate_to_gem(data)
+        # Update recent positions (keep last N, e.g., 5)
+        self.recent_positions.append(bot_pos)
+        if len(self.recent_positions) > 5:
+            self.recent_positions.pop(0)
+        print(f"Recent positions: {self.recent_positions}", file=sys.stderr)
+        # Check for visible gems
+        gems = data.get("visible_gems", [])
+        if not gems:
+            next_pos = self.search_gems(data)
+        else:
+            next_pos = self.navigate_to_gem(data)
         # Map position delta to direction
         dx = next_pos[0] - bot_pos[0]
         dy = next_pos[1] - bot_pos[1]

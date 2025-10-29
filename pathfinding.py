@@ -1,5 +1,6 @@
 from collections import deque
 from config import Direction
+from typing import Callable
 
 
 def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
@@ -26,6 +27,62 @@ def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 
+def bfs(
+    start: tuple[int, int],
+    is_goal: Callable[[tuple[int, int], list[tuple[int, int]]], bool],
+    walls: set[tuple[int, int]],
+    width: int,
+    height: int,
+    directions: list | None = None,
+) -> list[tuple[int, int]]:
+    """
+    Generic BFS for grid pathfinding.
+
+    Parameters
+    ----------
+    start : tuple[int, int]
+        Starting position.
+    is_goal : callable
+        Function taking (pos, path) and returning True if goal is reached.
+    walls : set[tuple[int, int]]
+        Blocked positions.
+    width : int
+        Grid width.
+    height : int
+        Grid height.
+    directions : list, optional
+        List of movement directions.
+
+    Returns
+    -------
+    path : list[tuple[int, int]]
+        Path from start to goal, or empty list if not found.
+    """
+    queue = deque()
+    queue.append((start, [start]))
+    visited = set([start])
+    if directions is None:
+        directions = [d for d in Direction if d != Direction.WAIT]
+
+    while queue:
+        current_pos, path = queue.popleft()
+        if is_goal(current_pos, path):
+            return path
+        for direction in directions:
+            dx, dy = direction.value
+            neighbor = (current_pos[0] + dx, current_pos[1] + dy)
+            x, y = neighbor
+            if (
+                0 <= x < width
+                and 0 <= y < height
+                and neighbor not in walls
+                and neighbor not in visited
+            ):
+                visited.add(neighbor)
+                queue.append((neighbor, path + [neighbor]))
+    return []
+
+
 def find_path(
     start: tuple[int, int],
     goal: tuple[int, int],
@@ -34,11 +91,10 @@ def find_path(
     height: int,
 ) -> list[tuple[int, int]]:
     """
-    Find the shortest path from start to goal on a grid, avoiding walls, using Breadth-First Search (BFS).
+    Find the shortest path from start to goal on a grid using BFS.
 
-    This function explores the grid in all four cardinal directions (up, down, left, right),
-    expanding outward from the start position. It avoids positions listed in `walls` and does not revisit any position.
-    The search guarantees the shortest path in terms of number of steps, if one exists. If no path is found, returns an empty list.
+    This function computes the shortest path between two points on a grid, avoiding blocked positions (walls).
+    It uses Breadth-First Search (BFS) to guarantee the shortest path in an unweighted grid.
 
     Parameters
     ----------
@@ -56,36 +112,20 @@ def find_path(
     Returns
     -------
     path : list of tuple of int
-        List of positions from start to goal (inclusive). Empty if no path exists.
+        The shortest path from start to goal as a list of positions [(x0, y0), ..., (xn, yn)].
+        Returns an empty list if no path exists.
 
     Examples
     --------
-    >>> find_path((0, 0), (2, 2), {(1, 1)}, 3, 3)
-    [(0, 0), (0, 1), (0, 2), (1, 2), (2, 2)]
+    >>> find_path((0, 0), (2, 2), set(), 3, 3)
+    [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2)]
+    >>> find_path((0, 0), (1, 1), {(1, 0)}, 2, 2)
+    [(0, 0), (0, 1), (1, 1)]
     """
-    queue = deque()
-    queue.append((start, [start]))
-    visited = set([start])
-
-    # Use only movement directions, exclude WAIT
-    directions = [d for d in Direction if d != Direction.WAIT]
-
-    while queue:
-        current_pos, path = queue.popleft()
-        if current_pos == goal:
-            return path
-
-        for direction in directions:
-            dx, dy = direction.value
-            neighbor = (current_pos[0] + dx, current_pos[1] + dy)
-            x, y = neighbor
-            # Check bounds and obstacles
-            if (
-                0 <= x < width
-                and 0 <= y < height
-                and neighbor not in walls
-                and neighbor not in visited
-            ):
-                visited.add(neighbor)
-                queue.append((neighbor, path + [neighbor]))
-    return []
+    return bfs(
+        start,
+        is_goal=lambda pos, path: pos == goal,
+        walls=walls,
+        width=width,
+        height=height,
+    )
