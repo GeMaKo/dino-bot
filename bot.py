@@ -2,6 +2,7 @@
 import sys
 import json
 from pathfinding import find_path, manhattan
+from config import Direction
 
 
 class CollectorBot:
@@ -163,14 +164,9 @@ class CollectorBot:
         # Map position delta to direction
         dx = next_pos[0] - bot_pos[0]
         dy = next_pos[1] - bot_pos[1]
-        direction_map = {
-            (0, -1): "N",
-            (0, 1): "S",
-            (1, 0): "E",
-            (-1, 0): "W",
-            (0, 0): "WAIT",
-        }
-        move = direction_map.get((dx, dy), "WAIT")
+        # Find the matching Direction enum for the delta
+        move_direction = Direction.from_delta(dx, dy)
+        move = Direction.to_str(move_direction)
         return move
 
     def run(self):

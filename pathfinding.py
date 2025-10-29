@@ -1,4 +1,5 @@
 from collections import deque
+from config import Direction
 
 
 def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
@@ -66,19 +67,16 @@ def find_path(
     queue.append((start, [start]))
     visited = set([start])
 
-    directions: list[tuple[int, int]] = [
-        (-1, 0),
-        (1, 0),
-        (0, -1),
-        (0, 1),
-    ]  # left, right, up, down
+    # Use only movement directions, exclude WAIT
+    directions = [d for d in Direction if d != Direction.WAIT]
 
     while queue:
         current_pos, path = queue.popleft()
         if current_pos == goal:
             return path
 
-        for dx, dy in directions:
+        for direction in directions:
+            dx, dy = direction.value
             neighbor = (current_pos[0] + dx, current_pos[1] + dy)
             x, y = neighbor
             # Check bounds and obstacles
