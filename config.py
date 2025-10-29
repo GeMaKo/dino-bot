@@ -1,6 +1,8 @@
 from enum import Enum
 from functools import lru_cache
 
+RECENT_POSITIONS_LIMIT = 5
+
 _STR_MAP = {
     "LEFT": "W",
     "RIGHT": "E",

@@ -2,7 +2,7 @@
 import json
 import sys
 
-from config import Direction
+from config import RECENT_POSITIONS_LIMIT, Direction
 from pathfinding import bfs, find_path, manhattan
 
 
@@ -209,9 +209,9 @@ class CollectorBot:
             )
         # Use pathfinding to determine next move
         bot_pos = tuple(data.get("bot"))
-        # Update recent positions (keep last N, e.g., 5)
+        # Update recent positions (keep last N, from config)
         self.recent_positions.append(bot_pos)
-        if len(self.recent_positions) > 5:
+        if len(self.recent_positions) > RECENT_POSITIONS_LIMIT:
             self.recent_positions.pop(0)
         # Check for visible gems
         gems = data.get("visible_gems", [])
