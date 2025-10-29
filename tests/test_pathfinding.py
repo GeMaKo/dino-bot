@@ -1,6 +1,5 @@
-from pathfinding import find_path
-from pathfinding import bfs
 from config import Direction
+from pathfinding import bfs, find_path
 
 
 def test_simple_path():

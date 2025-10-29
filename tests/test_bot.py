@@ -1,4 +1,5 @@
 import json
+
 from bot import CollectorBot
 from bot_helper import generate_arena_state
 

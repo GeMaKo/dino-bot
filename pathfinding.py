@@ -1,6 +1,7 @@
 from collections import deque
-from config import Direction
 from typing import Callable
+
+from config import Direction
 
 
 def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:

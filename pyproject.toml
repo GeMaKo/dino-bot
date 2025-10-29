@@ -20,6 +20,7 @@ optional = true
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.3.0"
+ruff = "^0.14.2"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

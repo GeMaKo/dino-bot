@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-import sys
 import json
-from pathfinding import find_path, manhattan, bfs
+import sys
+
 from config import Direction
+from pathfinding import bfs, find_path, manhattan
 
 
 class CollectorBot:

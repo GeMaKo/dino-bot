@@ -46,4 +46,3 @@ test:
 coverage:
 	source .venv/bin/activate && \
 	pytest --cov-report term-missing --cov-report html:cov_html --cov=src/doc_ai/libraries --cov=src/eval_toolkit tests/_0_unit_tests
-
