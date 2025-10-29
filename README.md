@@ -14,45 +14,30 @@ A Python bot for navigating and collecting gems in a grid-based arena. This proj
 ├── bot.py              # Main bot logic and entry point
 ├── bot_helper.py       # Arena state generation utilities
 ├── pathfinding.py      # Pathfinding and distance functions
-├── bot.yaml            # Bot configuration (if used)
+├── bot.yaml            # Bot configuration
 ├── Makefile            # Build and run commands
 ├── start.sh / .bat     # Startup scripts
-├── tests/              # Unit tests
-└── dino_bot_debug.txt  # Debug output
+└── tests/              # Unit tests
 ```
 
 ## Getting Started
-1. **Install dependencies** (if any):
+1. **Install dependencies**:
+   ### For usage
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt  # if exists
+   make .venv
+   make install
    ```
-2. **Run the bot**:
+   ### For development
    ```bash
-   python bot.py
+   make .venv
+   make install-dev
    ```
-3. **Run tests**:
+2. **Run tests**:
    ```bash
-   python -m unittest discover tests
+   make tests
    ```
 
 ## Usage
 - The bot reads game state from stdin and prints its next move to stdout.
 - Arena state can be generated using `bot_helper.py` for testing.
 - Pathfinding is handled in `pathfinding.py`.
-
-## Example
-```python
-from bot_helper import generate_arena_state
-print(generate_arena_state())
-```
-
-## Documentation
-All public functions and classes use scikit-learn style docstrings for clarity and consistency.
-
-## Contributing
-Pull requests and issues are welcome! Please ensure code is well-documented and tested.
-
-## License
-MIT License
