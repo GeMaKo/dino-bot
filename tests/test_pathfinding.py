@@ -1,0 +1,49 @@
+from pathfinding import find_path
+
+
+def test_simple_path():
+    start = (0, 0)
+    goal = (2, 0)
+    walls = set()
+    width, height = 3, 1
+    path = find_path(start, goal, walls, width, height)
+    assert path == [(0, 0), (1, 0), (2, 0)]
+
+
+def test_with_walls():
+    start = (0, 0)
+    goal = (2, 0)
+    walls = {(1, 0)}
+    width, height = 3, 1
+    path = find_path(start, goal, walls, width, height)
+    assert path == []
+
+
+def test_grid_path():
+    start = (0, 0)
+    goal = (2, 2)
+    walls = {(1, 1)}
+    width, height = 3, 3
+    path = find_path(start, goal, walls, width, height)
+    # Should avoid (1,1)
+    assert (1, 1) not in path
+    assert path[0] == start
+    assert path[-1] == goal
+
+
+def test_start_is_goal():
+    start = (1, 1)
+    goal = (1, 1)
+    walls = set()
+    width, height = 3, 3
+    path = find_path(start, goal, walls, width, height)
+    assert path == [(1, 1)]
+
+
+def test_unreachable_goal():
+    start = (0, 0)
+    goal = (2, 2)
+    walls = {(1, 0), (0, 1), (1, 2), (2, 1)}
+    width, height = 3, 3
+    path = find_path(start, goal, walls, width, height)
+    assert path == []
