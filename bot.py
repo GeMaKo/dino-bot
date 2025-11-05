@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import random
 import sys
 from typing import Optional
 
@@ -9,7 +10,16 @@ from bot_logic import (
     get_path_to_closest_reachable_gem,
 )
 from bot_utils import parse_gamestate
-from config import RECENT_POSITIONS_LIMIT, Coords, Direction, GameConfig, GameState, Gem
+from config import (
+    RANDOM_MOVES,
+    RECENT_POSITIONS_LIMIT,
+    Coords,
+    Direction,
+    GameConfig,
+    GameState,
+    Gem,
+    Phase,
+)
 from pathfinding import bfs
 
 
@@ -52,6 +62,8 @@ class CollectorBot:
         self.config: Optional[GameConfig] = None
         self.game_state: Optional[GameState] = None
         self.recent_positions: list[Coords] = []
+        self.phase = Phase.MOVE_TO_CENTER
+        self.random_moves_left = 0
 
     def navigate_to_gem(self, reachable_gems: list[Gem]) -> Coords:
         """
@@ -104,39 +116,56 @@ class CollectorBot:
         center_y = self.config.height // 2
         center = Coords(center_x, center_y)
 
-        # All possible directions except WAIT
-        directions = [Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN]
+        if self.phase == Phase.MOVE_TO_CENTER:
+            bot_pos = self.game_state.bot
+            if bot_pos == center:
+                self.phase = Phase.RANDOM_MOVEMENT
+                self.random_moves_left = RANDOM_MOVES  # Number of random moves
+            else:
+                # Try moving along x axis first
+                dx = center.x - bot_pos.x
+                dy = center.y - bot_pos.y
+                if dx != 0:
+                    next_x = bot_pos.x + (1 if dx > 0 else -1)
+                    next_pos = Coords(next_x, bot_pos.y)
+                    if next_pos not in self.game_state.wall:
+                        return next_pos
+                if dy != 0:
+                    next_y = bot_pos.y + (1 if dy > 0 else -1)
+                    next_pos = Coords(bot_pos.x, next_y)
+                    if next_pos not in self.game_state.wall:
+                        return next_pos
 
-        # Sort directions by which brings bot closer to center
+        # Phase 2: Random moves
+        if self.phase == Phase.RANDOM_MOVEMENT and self.random_moves_left > 0:
+            directions = [Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN]
+            random.shuffle(directions)
+            for direction in directions:
+                dx, dy = direction.value.x, direction.value.y
+                next_pos = Coords(
+                    self.game_state.bot.x + dx, self.game_state.bot.y + dy
+                )
+                if next_pos not in self.game_state.wall:
+                    self.random_moves_left -= 1
+                    if self.random_moves_left == 0:
+                        self.phase = Phase.NORMAL_SEARCH
+                    return next_pos
+            # If all random moves blocked, fall back to normal search below
+
+        # Phase 3: Normal search
+        directions = [Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN]
+        center = Coords(center_x, center_y)
+
         def direction_bias(direction):
-            assert self.game_state is not None
             dx, dy = direction.value.x, direction.value.y
+            if self.game_state is None:
+                return float("inf")
             new_pos = Coords(self.game_state.bot.x + dx, self.game_state.bot.y + dy)
             return abs(new_pos.x - center.x) + abs(new_pos.y - center.y)
 
         preferred_directions = sorted(directions, key=direction_bias)
 
         def is_goal(pos: Coords, path: list[Coords]) -> bool:
-            """
-            Determine if a position is a valid goal for exploration.
-
-            The goal is any position that:
-            - Is not the bot's current position,
-            - Is not a wall,
-            - Has not been visited recently.
-
-            Parameters
-            ----------
-            pos : Coords
-                The position to check.
-            path : list of Coords
-                The path taken to reach this position (not used here).
-
-            Returns
-            -------
-            bool
-                True if the position is a valid goal, False otherwise.
-            """
             assert self.game_state is not None
             return (
                 pos != self.game_state.bot
@@ -152,7 +181,6 @@ class CollectorBot:
             height=self.config.height,
             directions=preferred_directions,
         )
-        # Return the next step in the path, if available
         if path and len(path) > 1:
             return path[1]
         return self.game_state.bot
@@ -198,13 +226,20 @@ class CollectorBot:
 
         # Check for search or navigate to gems
         reachable_gems = [gem for gem in self.game_state.visible_gems if gem.reachable]
-        print(f"Reachable gems: {reachable_gems}", file=sys.stderr)
         if not reachable_gems:
             next_pos = self.search_gems()
-            print("Searching for gems...", file=sys.stderr)
+            print(f"Searching for gems {self.phase}...", file=sys.stderr)
         else:
             next_pos = self.navigate_to_gem(reachable_gems)
             print(f"Navigating to gem at {next_pos}", file=sys.stderr)
+            if any(gem.position == next_pos for gem in self.game_state.visible_gems):
+                self.phase = Phase.MOVE_TO_CENTER
+                self.random_moves_left = 0
+                self.recent_positions.clear()
+                print(
+                    "Will collect a gem, resetting to MOVE_TO_CENTER phase",
+                    file=sys.stderr,
+                )
         # Map position delta to direction
         dx = next_pos.x - self.game_state.bot.x
         dy = next_pos.y - self.game_state.bot.y
@@ -240,6 +275,7 @@ class CollectorBot:
             data = json.loads(line)
             if first_tick:
                 self.config = GameConfig(**data.get("config"))
+                random.seed(self.config.bot_seed)
                 data.pop("config", None)
                 print(
                     f"Collector bot (Python) launching on a {self.config.width}x{self.config.height} map",

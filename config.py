@@ -3,7 +3,7 @@ from enum import Enum
 from functools import lru_cache
 
 RECENT_POSITIONS_LIMIT = 5
-
+RANDOM_MOVES = 10
 
 _STR_MAP = {
     "LEFT": "W",
@@ -12,6 +12,12 @@ _STR_MAP = {
     "DOWN": "S",
     "WAIT": "WAIT",
 }
+
+
+class Phase(Enum):
+    MOVE_TO_CENTER = 1
+    RANDOM_MOVEMENT = 2
+    NORMAL_SEARCH = 3
 
 
 @dataclass(frozen=True)
