@@ -1,61 +1,106 @@
-import json
-
 from bot import CollectorBot
-from bot_helper import generate_arena_state
+from config import Coords, EnemyBot, GameConfig, GameState, Gem, Wall
 
 
-def test_bot_initialization():
+def make_config():
+    return GameConfig(
+        stage_key="test",
+        width=5,
+        height=5,
+        generator="test",
+        max_ticks=100,
+        emit_signals=False,
+        vis_radius=3,
+        max_gems=5,
+        gem_spawn_rate=1.0,
+        gem_ttl=10,
+        signal_radius=1.0,
+        signal_cutoff=0.5,
+        signal_noise=0.1,
+        signal_quantization=1,
+        signal_fade=1,
+        bot_seed=42,
+    )
+
+
+def make_game_state(bot_pos=(0, 0), gems=None, walls=None, enemies=None):
+    if gems is None:
+        gems = []
+    if walls is None:
+        walls = set()
+    if enemies is None:
+        enemies = []
+    return GameState(
+        tick=1,
+        bot=Coords(*bot_pos),
+        wall={Wall(position=Coords(*w)) for w in walls},
+        floor=set(),
+        initiative=True,
+        visible_gems=gems,
+        visible_bots=[EnemyBot(position=Coords(*e)) for e in enemies],
+    )
+
+
+def test_navigate_to_gem_moves_toward_gem():
     bot = CollectorBot()
-    assert hasattr(bot, "width")
-    assert hasattr(bot, "height")
-    assert hasattr(bot, "walls")
+    bot.config = make_config()
+    gem = Gem(position=Coords(2, 2), ttl=10)
+    bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
+    gem.distance2bot = 4
+    gem.reachable = True
+    next_pos = bot.navigate_to_gem([gem])
+    assert next_pos != bot.game_state.bot
+    assert isinstance(next_pos, Coords)
 
 
-def test_process_input_first_tick_sets_config():
+def test_search_gems_moves_toward_center():
     bot = CollectorBot()
-    state = json.loads(generate_arena_state())
-    line = json.dumps(state)
-    move = bot.process_input(line, first_tick=True)
-    assert bot.width == state["config"]["width"]
-    assert bot.height == state["config"]["height"]
-    assert bot.walls == set(tuple(w) for w in state["wall"])
-    assert move == "WAIT" or move in {"N", "S", "E", "W"}
+    bot.config = make_config()
+    bot.game_state = make_game_state(bot_pos=(0, 0))
+    pos = bot.search_gems()
+    assert isinstance(pos, Coords)
+    assert pos != bot.game_state.bot
 
 
-def test_navigate_to_gem_returns_next_pos():
+def test_enrich_game_state_sets_distances_and_reachable():
     bot = CollectorBot()
-    bot.width = 5
-    bot.height = 5
-    bot.walls = set()
-    game_state = {"bot": [0, 0], "visible_gems": [{"position": [2, 2]}]}
-    next_pos = bot.navigate_to_gem(game_state)
-    assert isinstance(next_pos, tuple)
-    assert next_pos != (0, 0)
+    bot.config = make_config()
+    gem = Gem(position=Coords(2, 2), ttl=10)
+    bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem], enemies=[(4, 4)])
+    bot.enrich_game_state()
+    assert bot.game_state.visible_gems[0].distance2bot is not None
+    assert isinstance(bot.game_state.visible_gems[0].distance2enemies, list)
+    assert isinstance(bot.game_state.visible_gems[0].reachable, bool)
 
 
-def test_get_path_to_closest_top3_gem_returns_path():
+def test_process_game_state_returns_move():
     bot = CollectorBot()
-    bot.width = 5
-    bot.height = 5
-    bot.walls = set()
-    gems = [{"position": [2, 2]}, {"position": [1, 1]}]
-    path = bot.get_path_to_closest_top3_gem((0, 0), gems)
-    assert isinstance(path, list)
-    assert path[0] == (0, 0)
-    assert path[-1] in {(2, 2), (1, 1)}
-
-
-def test_process_input_move_direction():
-    bot = CollectorBot()
-    bot.width = 5
-    bot.height = 5
-    bot.walls = set()
-    state = {
-        "bot": [0, 0],
-        "visible_gems": [{"position": [0, 1]}],
-        "config": {"width": 5, "height": 5},
-        "wall": [],
-    }
-    line = json.dumps(state)
-    move = bot.process_input(line, first_tick=False)
+    bot.config = make_config()
+    gem = Gem(position=Coords(2, 2), ttl=10)
+    bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
+    gem.distance2bot = 4
+    gem.reachable = True
+    move = bot.process_game_state()
     assert move in {"N", "S", "E", "W", "WAIT"}
+
+
+def test_run_reads_and_prints(monkeypatch, capsys):
+    bot = CollectorBot()
+    config = make_config()
+    data = {
+        "config": config.__dict__,
+        "tick": 1,
+        "bot": [0, 0],
+        "wall": [],
+        "floor": [],
+        "initiative": True,
+        "visible_gems": [{"position": [2, 2], "ttl": 10}],
+        "visible_bots": [],
+    }
+    import json
+
+    lines = [json.dumps(data) + "\n"]
+    monkeypatch.setattr("sys.stdin", lines)
+    bot.run()
+    out = capsys.readouterr().out
+    assert out.strip() in {"N", "S", "E", "W", "WAIT"}

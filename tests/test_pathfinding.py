@@ -1,152 +1,77 @@
-from config import Direction
-from pathfinding import bfs, find_path
+from config import Coords, Direction, Wall
+from pathfinding import bfs, find_path, manhattan
 
 
-def test_simple_path():
-    start = (0, 0)
-    goal = (2, 0)
+def test_manhattan_distance():
+    a = Coords(0, 0)
+    b = Coords(3, 4)
+    assert manhattan(a, b) == 7
+    assert manhattan(b, a) == 7
+    assert manhattan(a, a) == 0
+    assert manhattan(Coords(-1, -1), Coords(1, 1)) == 4
+
+
+def test_bfs_finds_path():
+    start = Coords(0, 0)
+    goal = Coords(2, 0)
     walls = set()
     width, height = 3, 1
-    path = find_path(start, goal, walls, width, height)
-    assert path == [(0, 0), (1, 0), (2, 0)]
+    path = bfs(
+        start,
+        is_goal=lambda pos, path: pos == goal,
+        walls=walls,
+        width=width,
+        height=height,
+        directions=[Direction.RIGHT],
+    )
+    assert path == [Coords(0, 0), Coords(1, 0), Coords(2, 0)]
 
 
-def test_with_walls():
-    start = (0, 0)
-    goal = (2, 0)
-    walls = {(1, 0)}
+def test_bfs_with_wall():
+    start = Coords(0, 0)
+    goal = Coords(2, 0)
+    walls = {Wall(position=Coords(1, 0))}
     width, height = 3, 1
-    path = find_path(start, goal, walls, width, height)
+    path = bfs(
+        start,
+        is_goal=lambda pos, path: pos == goal,
+        walls=walls,
+        width=width,
+        height=height,
+        directions=[Direction.RIGHT],
+    )
     assert path == []
 
 
-def test_grid_path():
-    start = (0, 0)
-    goal = (2, 2)
-    walls = {(1, 1)}
+def test_find_path_grid():
+    start = Coords(0, 0)
+    goal = Coords(2, 2)
+    walls = {Wall(position=Coords(1, 1))}
     width, height = 3, 3
     path = find_path(start, goal, walls, width, height)
-    # Should avoid (1,1)
-    assert (1, 1) not in path
     assert path[0] == start
     assert path[-1] == goal
+    assert Coords(1, 1) not in path
 
 
-def test_start_is_goal():
-    start = (1, 1)
-    goal = (1, 1)
+def test_find_path_start_is_goal():
+    start = Coords(1, 1)
+    goal = Coords(1, 1)
     walls = set()
     width, height = 3, 3
     path = find_path(start, goal, walls, width, height)
-    assert path == [(1, 1)]
+    assert path == [Coords(1, 1)]
 
 
-def test_unreachable_goal():
-    start = (0, 0)
-    goal = (2, 2)
-    walls = {(1, 0), (0, 1), (1, 2), (2, 1)}
+def test_find_path_unreachable():
+    start = Coords(0, 0)
+    goal = Coords(2, 2)
+    walls = {
+        Wall(position=Coords(1, 0)),
+        Wall(position=Coords(0, 1)),
+        Wall(position=Coords(1, 2)),
+        Wall(position=Coords(2, 1)),
+    }
     width, height = 3, 3
     path = find_path(start, goal, walls, width, height)
-    assert path == []
-
-
-def test_bfs_simple_path():
-    directions = [Direction.RIGHT]
-    start = (0, 0)
-    goal = (2, 0)
-    walls = set()
-    width, height = 3, 1
-    path = bfs(
-        start,
-        is_goal=lambda pos, path: pos == goal,
-        walls=walls,
-        width=width,
-        height=height,
-        directions=directions,
-    )
-    assert path == [(0, 0), (1, 0), (2, 0)]
-
-
-def test_bfs_with_walls():
-    directions = [Direction.RIGHT]
-    start = (0, 0)
-    goal = (2, 0)
-    walls = {(1, 0)}
-    width, height = 3, 1
-    path = bfs(
-        start,
-        is_goal=lambda pos, path: pos == goal,
-        walls=walls,
-        width=width,
-        height=height,
-        directions=directions,
-    )
-    assert path == []
-
-
-def test_bfs_grid_path():
-    directions = [
-        Direction.RIGHT,
-        Direction.DOWN,
-        Direction.LEFT,
-        Direction.UP,
-    ]
-    start = (0, 0)
-    goal = (2, 2)
-    walls = {(1, 1)}
-    width, height = 3, 3
-    path = bfs(
-        start,
-        is_goal=lambda pos, path: pos == goal,
-        walls=walls,
-        width=width,
-        height=height,
-        directions=directions,
-    )
-    assert (1, 1) not in path
-    assert path[0] == start
-    assert path[-1] == goal
-
-
-def test_bfs_start_is_goal():
-    directions = [
-        Direction.RIGHT,
-        Direction.DOWN,
-        Direction.LEFT,
-        Direction.UP,
-    ]
-    start = (1, 1)
-    goal = (1, 1)
-    walls = set()
-    width, height = 3, 3
-    path = bfs(
-        start,
-        is_goal=lambda pos, path: pos == goal,
-        walls=walls,
-        width=width,
-        height=height,
-        directions=directions,
-    )
-    assert path == [(1, 1)]
-
-
-def test_bfs_unreachable_goal():
-    directions = [
-        Direction.RIGHT,
-        Direction.DOWN,
-        Direction.LEFT,
-        Direction.UP,
-    ]
-    start = (0, 0)
-    goal = (2, 2)
-    walls = {(1, 0), (0, 1), (1, 2), (2, 1)}
-    width, height = 3, 3
-    path = bfs(
-        start,
-        is_goal=lambda pos, path: pos == goal,
-        walls=walls,
-        width=width,
-        height=height,
-        directions=directions,
-    )
     assert path == []

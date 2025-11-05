@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 import json
 import sys
+from typing import Optional
 
-from config import RECENT_POSITIONS_LIMIT, Direction
-from pathfinding import bfs, find_path, manhattan
+from bot_logic import (
+    check_reachable_gems,
+    get_distances,
+    get_path_to_closest_reachable_gem,
+)
+from bot_utils import parse_gamestate
+from config import RECENT_POSITIONS_LIMIT, Coords, Direction, GameConfig, GameState, Gem
+from pathfinding import bfs
 
 
 class CollectorBot:
@@ -42,57 +49,11 @@ class CollectorBot:
         >>> bot = CollectorBot()
         >>> bot.width, bot.height, bot.walls = 5, 5, set()
         """
-        self.width: int | None = None
-        self.height: int | None = None
-        self.walls: set[tuple[int, int]] | None = None
-        self.recent_positions: list[tuple[int, int]] = []
+        self.config: Optional[GameConfig] = None
+        self.game_state: Optional[GameState] = None
+        self.recent_positions: list[Coords] = []
 
-    def get_path_to_closest_top3_gem(
-        self, bot_pos: tuple[int, int], gems: list[dict]
-    ) -> list[tuple[int, int]] | None:
-        """
-        Find the shortest path to one of the top 3 closest gems by Manhattan distance.
-
-        Filters the visible gems to the three closest (using Manhattan distance), then computes the shortest path to each using BFS. Returns the shortest valid path found, or None if no path exists.
-
-        Parameters
-        ----------
-        bot_pos : tuple of int
-            The current position of the bot as (x, y).
-        gems : list of dict
-            List of gem objects, each with a 'position' key.
-
-        Returns
-        -------
-        shortest_path : list of tuple of int or None
-            The shortest path to a gem, as a list of positions. None if no path exists.
-
-        Examples
-        --------
-        >>> bot = CollectorBot()
-        >>> bot.width, bot.height, bot.walls = 5, 5, set()
-        >>> gems = [{"position": [2, 2]}, {"position": [1, 1]}]
-        >>> bot.get_path_to_closest_top3_gem((0, 0), gems)
-        [(0, 0), (0, 1), (1, 1)]
-        """
-        # Pre-filter gems by Manhattan distance (top 3 closest)
-        gems_sorted = sorted(
-            gems, key=lambda gem: manhattan(bot_pos, tuple(gem["position"]))
-        )
-        gems_to_check = gems_sorted[:3]  # Only check top 3 closest gems
-        shortest_path = None
-        for gem in gems_to_check:
-            gem_pos = tuple(gem["position"])
-            if self.width is None or self.height is None or self.walls is None:
-                raise ValueError(
-                    "Map width, height, and walls must be initialized before pathfinding."
-                )
-            path = find_path(bot_pos, gem_pos, self.walls, self.width, self.height)
-            if path and (shortest_path is None or len(path) < len(shortest_path)):
-                shortest_path = path
-        return shortest_path
-
-    def navigate_to_gem(self, game_state: dict) -> tuple[int, int]:
+    def navigate_to_gem(self, reachable_gems: list[Gem]) -> Coords:
         """
         Determine the next position for the bot to move towards the closest gem.
 
@@ -116,24 +77,46 @@ class CollectorBot:
         >>> bot.navigate_to_gem({"bot": [0, 0], "visible_gems": [{"position": [2, 2]}]})
         (0, 1)
         """
-        bot_pos = tuple(game_state["bot"])
-        gems = game_state.get("visible_gems", [])
-        if not gems:
-            return bot_pos  # No gems to move to
-        shortest_path = self.get_path_to_closest_top3_gem(bot_pos, gems)
+        if self.config is None or self.game_state is None:
+            raise RuntimeError("Bot not initialized. Call initialize() first.")
+        assert self.config is not None
+        assert self.game_state is not None
+        shortest_path = get_path_to_closest_reachable_gem(
+            self.game_state.bot,
+            reachable_gems,
+            self.game_state.wall,
+            self.config.width,
+            self.config.height,
+        )
         if shortest_path and len(shortest_path) > 1:
             next_pos = shortest_path[1]  # Next step
             return next_pos
-        return bot_pos
+        return self.game_state.bot
 
-    def search_gems(self, game_state: dict) -> tuple[int, int]:
-        bot_pos = tuple(game_state["bot"])
-        if self.width is None or self.height is None or self.walls is None:
-            raise ValueError(
-                "Map width, height, and walls must be initialized before pathfinding."
-            )
+    def search_gems(self) -> Coords:
+        if self.config is None or self.game_state is None:
+            raise RuntimeError("Bot not initialized. Call initialize() first.")
+        assert self.config is not None
+        assert self.game_state is not None
 
-        def is_goal(pos, path):
+        # Calculate center of the map
+        center_x = self.config.width // 2
+        center_y = self.config.height // 2
+        center = Coords(center_x, center_y)
+
+        # All possible directions except WAIT
+        directions = [Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN]
+
+        # Sort directions by which brings bot closer to center
+        def direction_bias(direction):
+            assert self.game_state is not None
+            dx, dy = direction.value.x, direction.value.y
+            new_pos = Coords(self.game_state.bot.x + dx, self.game_state.bot.y + dy)
+            return abs(new_pos.x - center.x) + abs(new_pos.y - center.y)
+
+        preferred_directions = sorted(directions, key=direction_bias)
+
+        def is_goal(pos: Coords, path: list[Coords]) -> bool:
             """
             Determine if a position is a valid goal for exploration.
 
@@ -144,86 +127,93 @@ class CollectorBot:
 
             Parameters
             ----------
-            pos : tuple[int, int]
+            pos : Coords
                 The position to check.
-            path : list[tuple[int, int]]
-                The current path taken (unused in this check).
+            path : list of Coords
+                The path taken to reach this position (not used here).
 
             Returns
             -------
             bool
                 True if the position is a valid goal, False otherwise.
             """
+            assert self.game_state is not None
             return (
-                pos != bot_pos
-                and pos not in self.walls
+                pos != self.game_state.bot
+                and pos not in self.game_state.wall
                 and pos not in self.recent_positions
             )
 
         path = bfs(
-            bot_pos,
+            self.game_state.bot,
             is_goal=is_goal,
-            walls=self.walls,
-            width=self.width,
-            height=self.height,
-            directions=[Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT],
+            walls=self.game_state.wall,
+            width=self.config.width,
+            height=self.config.height,
+            directions=preferred_directions,
         )
         # Return the next step in the path, if available
         if path and len(path) > 1:
             return path[1]
-        return bot_pos
+        return self.game_state.bot
 
-    def process_input(self, line: str, first_tick: bool = False) -> str:
+    def enrich_game_state(self) -> None:
+        """
+        Enrich the current game state with additional analysis.
+        """
+        assert self.game_state is not None
+        # Compute distances from bot to gems
+        self.game_state.visible_gems = get_distances(
+            self.game_state.bot,
+            self.game_state.visible_bots,
+            self.game_state.visible_gems,
+        )
+        # Analyze gem positions
+        self.game_state.visible_gems = check_reachable_gems(
+            self.game_state.visible_gems
+        )
+
+    def process_game_state(self) -> str:
         """
         Process a single line of input and determine the next move.
 
         Parses the input line (JSON), updates configuration on the first tick, and computes the next move using pathfinding.
 
-        Parameters
-        ----------
-        line : str
-            A JSON-encoded string representing the current game state.
-        first_tick : bool, default=False
-            Whether this is the first tick (used to initialize map configuration).
-
         Returns
         -------
         move : str
             The direction to move ('N', 'S', 'E', 'W', or 'WAIT').
-
-        Examples
-        --------
-        >>> bot = CollectorBot()
-        >>> bot.process_input('{"bot": [0, 0], "visible_gems": [], "config": {"width": 5, "height": 5}, "wall": []}', first_tick=True)
-        'WAIT'
         """
-        data = json.loads(line)
-        config = data.get("config", {})
-        if first_tick:
-            self.width = config.get("width")
-            self.height = config.get("height")
-            self.walls = set(tuple(w) for w in data.get("wall", []))
-            print(
-                f"Collector bot (Python) launching on a {self.width}x{self.height} map",
-                file=sys.stderr,
-            )
+        if self.config is None or self.game_state is None:
+            raise RuntimeError("Bot not initialized. Call initialize() first.")
+        assert self.config is not None
+        assert self.game_state is not None
+
         # Use pathfinding to determine next move
-        bot_pos = tuple(data.get("bot"))
         # Update recent positions (keep last N, from config)
-        self.recent_positions.append(bot_pos)
+        self.recent_positions.append(self.game_state.bot)
         if len(self.recent_positions) > RECENT_POSITIONS_LIMIT:
             self.recent_positions.pop(0)
-        # Check for visible gems
-        gems = data.get("visible_gems", [])
-        if not gems:
-            next_pos = self.search_gems(data)
+        self.enrich_game_state()
+
+        # Check for search or navigate to gems
+        reachable_gems = [gem for gem in self.game_state.visible_gems if gem.reachable]
+        print(f"Reachable gems: {reachable_gems}", file=sys.stderr)
+        if not reachable_gems:
+            next_pos = self.search_gems()
+            print("Searching for gems...", file=sys.stderr)
         else:
-            next_pos = self.navigate_to_gem(data)
+            next_pos = self.navigate_to_gem(reachable_gems)
+            print(f"Navigating to gem at {next_pos}", file=sys.stderr)
         # Map position delta to direction
-        dx = next_pos[0] - bot_pos[0]
-        dy = next_pos[1] - bot_pos[1]
+        dx = next_pos.x - self.game_state.bot.x
+        dy = next_pos.y - self.game_state.bot.y
         # Find the matching Direction enum for the delta
-        move_direction = Direction.from_delta(dx, dy)
+        move_direction = Direction.from_delta(Coords(x=dx, y=dy))
+        # print(
+        #    f"Bot at {self.game_state.bot}, moving to {next_pos} via {move_direction}",
+        #    file=sys.stderr,
+        # )
         move = Direction.to_str(move_direction)
         return move
 
@@ -245,8 +235,18 @@ class CollectorBot:
         # Reads from stdin, prints moves to stdout
         """
         first_tick = True
+
         for line in sys.stdin:
-            move = self.process_input(line, first_tick=first_tick)
+            data = json.loads(line)
+            if first_tick:
+                self.config = GameConfig(**data.get("config"))
+                data.pop("config", None)
+                print(
+                    f"Collector bot (Python) launching on a {self.config.width}x{self.config.height} map",
+                    file=sys.stderr,
+                )
+            self.game_state = parse_gamestate(data)
+            move = self.process_game_state()
             print(move, flush=True)
             first_tick = False
 
