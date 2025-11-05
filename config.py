@@ -3,7 +3,7 @@ from enum import Enum
 from functools import lru_cache
 
 RECENT_POSITIONS_LIMIT = 5
-RANDOM_MOVES = 10
+RANDOM_MOVES = 5
 
 _STR_MAP = {
     "LEFT": "W",

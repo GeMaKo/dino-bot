@@ -64,6 +64,12 @@ class CollectorBot:
         self.recent_positions: list[Coords] = []
         self.phase = Phase.MOVE_TO_CENTER
         self.random_moves_left = 0
+        self.normal_search_directions = [
+            Direction.LEFT,
+            Direction.RIGHT,
+            Direction.UP,
+            Direction.DOWN,
+        ]
 
     def navigate_to_gem(self, reachable_gems: list[Gem]) -> Coords:
         """
@@ -149,17 +155,23 @@ class CollectorBot:
                     self.random_moves_left -= 1
                     if self.random_moves_left == 0:
                         self.phase = Phase.NORMAL_SEARCH
+                        # Shuffle left/right directions only once when entering NORMAL_SEARCH
+                        lr = [Direction.LEFT, Direction.RIGHT]
+                        random.shuffle(lr)
+                        self.normal_search_directions = lr + [
+                            Direction.UP,
+                            Direction.DOWN,
+                        ]
                     return next_pos
             # If all random moves blocked, fall back to normal search below
 
         # Phase 3: Normal search
-        directions = [Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN]
+        directions = self.normal_search_directions
         center = Coords(center_x, center_y)
 
         def direction_bias(direction):
+            assert self.game_state is not None
             dx, dy = direction.value.x, direction.value.y
-            if self.game_state is None:
-                return float("inf")
             new_pos = Coords(self.game_state.bot.x + dx, self.game_state.bot.y + dy)
             return abs(new_pos.x - center.x) + abs(new_pos.y - center.y)
 
