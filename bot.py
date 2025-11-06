@@ -18,7 +18,7 @@ from config import (
     GameState,
     Gem,
 )
-from pathfinding import bfs
+from pathfinding import bfs, manhattan
 
 
 class CollectorBot:
@@ -116,23 +116,40 @@ class CollectorBot:
         assert self.config is not None
         assert self.game_state is not None
 
-        # Calculate center of the map
-        center_x = self.config.width // 2
-        center_y = self.config.height // 2
-        center = Coords(center_x, center_y)
+        center = Coords(self.config.width // 2, self.config.height // 2)
         bot_pos = self.game_state.bot
 
-        # If already at center, just stay
         if bot_pos == center:
             return bot_pos
 
-        # Try to move closer to the center, preferring directions that reduce distance
+        visible_enemies = [e for e in self.game_state.visible_bots if e != bot_pos]
+        closest_enemy = min(
+            visible_enemies,
+            key=lambda e: manhattan(e.position, bot_pos),
+            default=None,
+        )
+
         directions = self.normal_search_directions
 
         def direction_bias(direction):
             dx, dy = direction.value.x, direction.value.y
             new_pos = Coords(bot_pos.x + dx, bot_pos.y + dy)
-            return abs(new_pos.x - center.x) + abs(new_pos.y - center.y)
+            center_dist = manhattan(new_pos, center)
+            if closest_enemy:
+                enemy_center_dist = manhattan(closest_enemy.position, center)
+                bot_center_dist = manhattan(bot_pos, center)
+                enemy_dist = manhattan(new_pos, closest_enemy.position)
+                # Phase 1: Get closer to center than enemy
+                if bot_center_dist >= enemy_center_dist:
+                    # Prefer moves that get closer to center
+                    return center_dist
+                # Phase 2: Stay close to enemy (distance 2), but keep center advantage
+                if center_dist < enemy_center_dist:
+                    # Prefer distance 2 to enemy, penalize being further away
+                    return abs(enemy_dist - 2) * 10 + center_dist
+                return center_dist
+            else:
+                return center_dist
 
         preferred_directions = sorted(directions, key=direction_bias)
 
@@ -140,14 +157,48 @@ class CollectorBot:
             assert self.game_state is not None
             enemy_on_pos = pos in self.game_state.visible_bots
             can_move_on_enemy = self.game_state.initiative
-            return (
-                pos != bot_pos
-                and pos not in self.game_state.wall
-                and pos not in self.recent_positions
-                and (not enemy_on_pos or can_move_on_enemy)
-                and abs(pos.x - center.x) + abs(pos.y - center.y)
-                < abs(bot_pos.x - center.x) + abs(bot_pos.y - center.y)
-            )
+            if closest_enemy:
+                enemy_center_dist = manhattan(closest_enemy.position, center)
+                bot_center_dist = manhattan(bot_pos, center)
+                pos_center_dist = manhattan(pos, center)
+                enemy_dist = manhattan(pos, closest_enemy.position)
+                # Phase 1: Get closer to center than enemy and than current position
+                if bot_center_dist >= enemy_center_dist:
+                    # If enemy is at center, allow moving closer to center
+                    if enemy_center_dist == 0:
+                        return (
+                            pos != bot_pos
+                            and pos not in self.game_state.wall
+                            and pos not in self.recent_positions
+                            and (not enemy_on_pos or can_move_on_enemy)
+                            and pos_center_dist < bot_center_dist
+                        )
+                    return (
+                        pos != bot_pos
+                        and pos not in self.game_state.wall
+                        and pos not in self.recent_positions
+                        and (not enemy_on_pos or can_move_on_enemy)
+                        and pos_center_dist < enemy_center_dist
+                        and pos_center_dist < bot_center_dist
+                    )
+                # Phase 2: Stay close to enemy (distance 2), but keep center advantage
+                return (
+                    pos != bot_pos
+                    and pos not in self.game_state.wall
+                    and pos not in self.recent_positions
+                    and (not enemy_on_pos or can_move_on_enemy)
+                    and pos_center_dist < enemy_center_dist
+                    and enemy_dist == 2
+                )
+            else:
+                # No enemy: just move closer to center
+                return (
+                    pos != bot_pos
+                    and pos not in self.game_state.wall
+                    and pos not in self.recent_positions
+                    and (not enemy_on_pos or can_move_on_enemy)
+                    and manhattan(pos, center) < manhattan(bot_pos, center)
+                )
 
         path = bfs(
             bot_pos,
@@ -159,7 +210,6 @@ class CollectorBot:
         )
         if path and len(path) > 1:
             return path[1]
-        # If no path found, just stay in place
         return bot_pos
 
     def enrich_game_state(self) -> None:
