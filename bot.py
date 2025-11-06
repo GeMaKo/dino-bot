@@ -11,14 +11,12 @@ from bot_logic import (
 )
 from bot_utils import parse_gamestate
 from config import (
-    RANDOM_MOVES,
     RECENT_POSITIONS_LIMIT,
     Coords,
     Direction,
     GameConfig,
     GameState,
     Gem,
-    Phase,
 )
 from pathfinding import bfs
 
@@ -62,7 +60,6 @@ class CollectorBot:
         self.config: Optional[GameConfig] = None
         self.game_state: Optional[GameState] = None
         self.recent_positions: list[Coords] = []
-        self.phase = Phase.MOVE_TO_CENTER
         self.random_moves_left = 0
         self.normal_search_directions = [
             Direction.LEFT,
@@ -121,58 +118,18 @@ class CollectorBot:
         center_x = self.config.width // 2
         center_y = self.config.height // 2
         center = Coords(center_x, center_y)
+        bot_pos = self.game_state.bot
 
-        if self.phase == Phase.MOVE_TO_CENTER:
-            bot_pos = self.game_state.bot
-            if bot_pos == center:
-                self.phase = Phase.RANDOM_MOVEMENT
-                self.random_moves_left = RANDOM_MOVES  # Number of random moves
-            else:
-                # Try moving along x axis first
-                dx = center.x - bot_pos.x
-                dy = center.y - bot_pos.y
-                if dx != 0:
-                    next_x = bot_pos.x + (1 if dx > 0 else -1)
-                    next_pos = Coords(next_x, bot_pos.y)
-                    if next_pos not in self.game_state.wall:
-                        return next_pos
-                if dy != 0:
-                    next_y = bot_pos.y + (1 if dy > 0 else -1)
-                    next_pos = Coords(bot_pos.x, next_y)
-                    if next_pos not in self.game_state.wall:
-                        return next_pos
+        # If already at center, just stay
+        if bot_pos == center:
+            return bot_pos
 
-        # Phase 2: Random moves
-        if self.phase == Phase.RANDOM_MOVEMENT and self.random_moves_left > 0:
-            directions = [Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN]
-            random.shuffle(directions)
-            for direction in directions:
-                dx, dy = direction.value.x, direction.value.y
-                next_pos = Coords(
-                    self.game_state.bot.x + dx, self.game_state.bot.y + dy
-                )
-                if next_pos not in self.game_state.wall:
-                    self.random_moves_left -= 1
-                    if self.random_moves_left == 0:
-                        self.phase = Phase.NORMAL_SEARCH
-                        # Shuffle left/right directions only once when entering NORMAL_SEARCH
-                        lr = [Direction.LEFT, Direction.RIGHT]
-                        random.shuffle(lr)
-                        self.normal_search_directions = lr + [
-                            Direction.UP,
-                            Direction.DOWN,
-                        ]
-                    return next_pos
-            # If all random moves blocked, fall back to normal search below
-
-        # Phase 3: Normal search
+        # Try to move closer to the center, preferring directions that reduce distance
         directions = self.normal_search_directions
-        center = Coords(center_x, center_y)
 
         def direction_bias(direction):
-            assert self.game_state is not None
             dx, dy = direction.value.x, direction.value.y
-            new_pos = Coords(self.game_state.bot.x + dx, self.game_state.bot.y + dy)
+            new_pos = Coords(bot_pos.x + dx, bot_pos.y + dy)
             return abs(new_pos.x - center.x) + abs(new_pos.y - center.y)
 
         preferred_directions = sorted(directions, key=direction_bias)
@@ -180,13 +137,15 @@ class CollectorBot:
         def is_goal(pos: Coords, path: list[Coords]) -> bool:
             assert self.game_state is not None
             return (
-                pos != self.game_state.bot
+                pos != bot_pos
                 and pos not in self.game_state.wall
                 and pos not in self.recent_positions
+                and abs(pos.x - center.x) + abs(pos.y - center.y)
+                < abs(bot_pos.x - center.x) + abs(bot_pos.y - center.y)
             )
 
         path = bfs(
-            self.game_state.bot,
+            bot_pos,
             is_goal=is_goal,
             walls=self.game_state.wall,
             width=self.config.width,
@@ -195,7 +154,8 @@ class CollectorBot:
         )
         if path and len(path) > 1:
             return path[1]
-        return self.game_state.bot
+        # If no path found, just stay in place
+        return bot_pos
 
     def enrich_game_state(self) -> None:
         """
@@ -240,18 +200,13 @@ class CollectorBot:
         reachable_gems = [gem for gem in self.game_state.visible_gems if gem.reachable]
         if not reachable_gems:
             next_pos = self.search_gems()
-            print(f"Searching for gems {self.phase}...", file=sys.stderr)
+            print("Searching for gems ...", file=sys.stderr)
         else:
             next_pos = self.navigate_to_gem(reachable_gems)
             print(f"Navigating to gem at {next_pos}", file=sys.stderr)
             if any(gem.position == next_pos for gem in self.game_state.visible_gems):
-                self.phase = Phase.MOVE_TO_CENTER
-                self.random_moves_left = 0
                 self.recent_positions.clear()
-                print(
-                    "Will collect a gem, resetting to MOVE_TO_CENTER phase",
-                    file=sys.stderr,
-                )
+
         # Map position delta to direction
         dx = next_pos.x - self.game_state.bot.x
         dy = next_pos.y - self.game_state.bot.y
