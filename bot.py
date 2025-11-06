@@ -102,6 +102,8 @@ class CollectorBot:
             self.game_state.wall,
             self.config.width,
             self.config.height,
+            self.game_state.visible_bots,
+            self.game_state.initiative,
         )
         if shortest_path and len(shortest_path) > 1:
             next_pos = shortest_path[1]  # Next step
@@ -136,10 +138,13 @@ class CollectorBot:
 
         def is_goal(pos: Coords, path: list[Coords]) -> bool:
             assert self.game_state is not None
+            enemy_on_pos = pos in self.game_state.visible_bots
+            can_move_on_enemy = self.game_state.initiative
             return (
                 pos != bot_pos
                 and pos not in self.game_state.wall
                 and pos not in self.recent_positions
+                and (not enemy_on_pos or can_move_on_enemy)
                 and abs(pos.x - center.x) + abs(pos.y - center.y)
                 < abs(bot_pos.x - center.x) + abs(bot_pos.y - center.y)
             )
