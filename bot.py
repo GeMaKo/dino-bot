@@ -119,9 +119,6 @@ class CollectorBot:
         center = Coords(self.config.width // 2, self.config.height // 2)
         bot_pos = self.game_state.bot
 
-        if bot_pos == center:
-            return bot_pos
-
         visible_enemies = [e for e in self.game_state.visible_bots if e != bot_pos]
         closest_enemy = min(
             visible_enemies,
@@ -139,14 +136,15 @@ class CollectorBot:
                 enemy_center_dist = manhattan(closest_enemy.position, center)
                 bot_center_dist = manhattan(bot_pos, center)
                 enemy_dist = manhattan(new_pos, closest_enemy.position)
-                # Phase 1: Get closer to center than enemy
+                # If bot is at least 3 steps closer to center than enemy, move towards enemy
+                if bot_center_dist <= enemy_center_dist - 3:
+                    return enemy_dist
+                # Otherwise, move towards center
                 if bot_center_dist >= enemy_center_dist:
-                    # Prefer moves that get closer to center
                     return center_dist
-                # Phase 2: Stay close to enemy (distance 2), but keep center advantage
+                # Stay close to enemy (distance 3), but keep center advantage
                 if center_dist < enemy_center_dist:
-                    # Prefer distance 2 to enemy, penalize being further away
-                    return abs(enemy_dist - 2) * 10 + center_dist
+                    return abs(enemy_dist - 3) * 10 + center_dist
                 return center_dist
             else:
                 return center_dist
@@ -155,50 +153,34 @@ class CollectorBot:
 
         def is_goal(pos: Coords, path: list[Coords]) -> bool:
             assert self.game_state is not None
+            if pos == bot_pos:
+                return False
+            if pos in self.game_state.wall or pos in self.recent_positions:
+                return False
             enemy_on_pos = pos in self.game_state.visible_bots
-            can_move_on_enemy = self.game_state.initiative
+            if enemy_on_pos and not self.game_state.initiative:
+                return False
+
             if closest_enemy:
                 enemy_center_dist = manhattan(closest_enemy.position, center)
                 bot_center_dist = manhattan(bot_pos, center)
                 pos_center_dist = manhattan(pos, center)
                 enemy_dist = manhattan(pos, closest_enemy.position)
-                # Phase 1: Get closer to center than enemy and than current position
+
+                # Phase 1: Move closer to center than enemy (or if enemy is at center, just get closer to center)
                 if bot_center_dist >= enemy_center_dist:
-                    # If enemy is at center, allow moving closer to center
                     if enemy_center_dist == 0:
-                        return (
-                            pos != bot_pos
-                            and pos not in self.game_state.wall
-                            and pos not in self.recent_positions
-                            and (not enemy_on_pos or can_move_on_enemy)
-                            and pos_center_dist < bot_center_dist
-                        )
+                        return pos_center_dist < bot_center_dist
                     return (
-                        pos != bot_pos
-                        and pos not in self.game_state.wall
-                        and pos not in self.recent_positions
-                        and (not enemy_on_pos or can_move_on_enemy)
-                        and pos_center_dist < enemy_center_dist
+                        pos_center_dist < enemy_center_dist
                         and pos_center_dist < bot_center_dist
                     )
+
                 # Phase 2: Stay close to enemy (distance 2), but keep center advantage
-                return (
-                    pos != bot_pos
-                    and pos not in self.game_state.wall
-                    and pos not in self.recent_positions
-                    and (not enemy_on_pos or can_move_on_enemy)
-                    and pos_center_dist < enemy_center_dist
-                    and enemy_dist == 2
-                )
-            else:
-                # No enemy: just move closer to center
-                return (
-                    pos != bot_pos
-                    and pos not in self.game_state.wall
-                    and pos not in self.recent_positions
-                    and (not enemy_on_pos or can_move_on_enemy)
-                    and manhattan(pos, center) < manhattan(bot_pos, center)
-                )
+                return pos_center_dist < enemy_center_dist and enemy_dist == 2
+
+            # No enemy: just move closer to center
+            return manhattan(pos, center) < manhattan(bot_pos, center)
 
         path = bfs(
             bot_pos,
