@@ -81,6 +81,3 @@ def find_path(
         goal=goal,  # Pass goal for axis prioritization
     )
     return path_tuples
-
-
-# ...existing code...
