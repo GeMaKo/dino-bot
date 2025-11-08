@@ -15,9 +15,8 @@ _STR_MAP = {
 
 
 class Phase(Enum):
-    MOVE_TO_CENTER = 1
-    RANDOM_MOVEMENT = 2
-    NORMAL_SEARCH = 3
+    SEARCH_GEMS = 0
+    COLLECT_GEMS = 1
 
 
 @dataclass(frozen=True)

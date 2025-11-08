@@ -17,6 +17,7 @@ from config import (
     GameConfig,
     GameState,
     Gem,
+    Phase,
 )
 from pathfinding import bfs, manhattan
 
@@ -67,6 +68,7 @@ class CollectorBot:
             Direction.UP,
             Direction.DOWN,
         ]
+        self.bot_phase = Phase.SEARCH_GEMS
 
     def navigate_to_gem(self, reachable_gems: list[Gem]) -> Coords:
         """
@@ -237,10 +239,15 @@ class CollectorBot:
         reachable_gems = [gem for gem in self.game_state.visible_gems if gem.reachable]
         if not reachable_gems:
             next_pos = self.search_gems()
-            print("Searching for gems ...", file=sys.stderr)
+            if self.bot_phase == Phase.COLLECT_GEMS:
+                print("No reachable gems, switching to search mode", file=sys.stderr)
+            self.bot_phase = Phase.SEARCH_GEMS
         else:
             next_pos = self.navigate_to_gem(reachable_gems)
-            print(f"Navigating to gem at {next_pos}", file=sys.stderr)
+            if self.bot_phase == Phase.SEARCH_GEMS:
+                print(f"Navigating to gem at {next_pos}", file=sys.stderr)
+            self.bot_phase = Phase.COLLECT_GEMS
+
             if any(gem.position == next_pos for gem in self.game_state.visible_gems):
                 self.recent_positions.clear()
 

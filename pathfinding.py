@@ -15,9 +15,11 @@ def bfs(
     width: int,
     height: int,
     directions: list[Direction] | None = None,
+    goal: Coords | None = None,  # Add goal for axis prioritization
 ) -> list[Coords]:
     """
     Generic BFS for grid pathfinding using Coords and Wall objects.
+    Prioritizes movement along the axis with the greatest remaining distance to the goal.
     """
     queue = deque()
     queue.append((start, [start]))
@@ -31,9 +33,27 @@ def bfs(
         current_pos, path = queue.popleft()
         if is_goal(current_pos, path):
             return path
-        for direction in directions:
-            dx, dy = direction.value.x, direction.value.y
-            neighbor = Coords(current_pos.x + dx, current_pos.y + dy)
+
+        # Prioritize directions based on greatest axis distance to goal
+        if goal is not None:
+            dx = abs(goal.x - current_pos.x)
+            dy = abs(goal.y - current_pos.y)
+            if dx > dy:
+                prioritized = [d for d in directions if d.value.x != 0] + [
+                    d for d in directions if d.value.y != 0
+                ]
+            elif dy > dx:
+                prioritized = [d for d in directions if d.value.y != 0] + [
+                    d for d in directions if d.value.x != 0
+                ]
+            else:
+                prioritized = directions
+        else:
+            prioritized = directions
+
+        for direction in prioritized:
+            ddx, ddy = direction.value.x, direction.value.y
+            neighbor = Coords(current_pos.x + ddx, current_pos.y + ddy)
             if (
                 0 <= neighbor.x < width
                 and 0 <= neighbor.y < height
@@ -58,5 +78,9 @@ def find_path(
         walls=walls,
         width=width,
         height=height,
+        goal=goal,  # Pass goal for axis prioritization
     )
     return path_tuples
+
+
+# ...existing code...
