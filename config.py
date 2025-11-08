@@ -3,6 +3,7 @@ from enum import Enum
 from functools import lru_cache
 
 RECENT_POSITIONS_LIMIT = 5
+DISTANCE_TO_ENEMY = 3
 RANDOM_MOVES = 5
 
 _STR_MAP = {

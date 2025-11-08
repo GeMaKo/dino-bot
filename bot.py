@@ -11,6 +11,7 @@ from bot_logic import (
 )
 from bot_utils import parse_gamestate
 from config import (
+    DISTANCE_TO_ENEMY,
     RECENT_POSITIONS_LIMIT,
     Coords,
     Direction,
@@ -138,15 +139,15 @@ class CollectorBot:
                 enemy_center_dist = manhattan(closest_enemy.position, center)
                 bot_center_dist = manhattan(bot_pos, center)
                 enemy_dist = manhattan(new_pos, closest_enemy.position)
-                # If bot is at least 3 steps closer to center than enemy, move towards enemy
-                if bot_center_dist <= enemy_center_dist - 3:
+                # If bot is at least DISTANCE_TO_ENEMY steps closer to center than enemy, move towards enemy
+                if bot_center_dist <= enemy_center_dist - DISTANCE_TO_ENEMY:
                     return enemy_dist
                 # Otherwise, move towards center
                 if bot_center_dist >= enemy_center_dist:
                     return center_dist
-                # Stay close to enemy (distance 3), but keep center advantage
+                # Stay close to enemy (distance DISTANCE_TO_ENEMY), but keep center advantage
                 if center_dist < enemy_center_dist:
-                    return abs(enemy_dist - 3) * 10 + center_dist
+                    return abs(enemy_dist - DISTANCE_TO_ENEMY) * 10 + center_dist
                 return center_dist
             else:
                 return center_dist
@@ -178,8 +179,11 @@ class CollectorBot:
                         and pos_center_dist < bot_center_dist
                     )
 
-                # Phase 2: Stay close to enemy (distance 3), but keep center advantage
-                return pos_center_dist < enemy_center_dist and enemy_dist == 3
+                # Phase 2: Stay close to enemy (distance DISTANCE_TO_ENEMY), but keep center advantage
+                return (
+                    pos_center_dist < enemy_center_dist
+                    and enemy_dist == DISTANCE_TO_ENEMY
+                )
 
             # No enemy: just move closer to center
             return manhattan(pos, center) < manhattan(bot_pos, center)
