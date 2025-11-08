@@ -6,7 +6,7 @@ from bot_logic import (
     check_reachable_gems,
     get_distances,
 )
-from config import Coords, EnemyBot, Floor, Gem, Wall
+from config import Coords, EnemyBot, Floor, GameConfig, Gem, Wall
 from pathfinding import find_path
 
 
@@ -23,6 +23,7 @@ class GameState:
     path_segments: dict = field(default_factory=dict)
     last_gem_positions: set[Coords] = field(default_factory=set)
     last_bot_pos: Coords | None = None
+    config: GameConfig | None = field(default=None)
 
     @cached_property
     def wall_positions(self) -> set[Coords]:
@@ -40,7 +41,10 @@ class GameState:
         )
         self.visible_gems = check_reachable_gems(self.visible_gems)
 
-    def update_distance_matrix(self, config):
+    def update_distance_matrix(self):
+        assert self.config is not None, (
+            "GameConfig must be set to update distance matrix"
+        )
         gem_positions = set(gem.position for gem in self.visible_gems if gem.reachable)
         bot_pos = self.bot
         if self.last_gem_positions != gem_positions:
@@ -55,8 +59,8 @@ class GameState:
                             src,
                             dst,
                             self.wall_positions,
-                            config.width,
-                            config.height,
+                            self.config.width,
+                            self.config.height,
                         )
                         self.path_segments[(src, dst)] = seg
                         self.distance_matrix[(src, dst)] = (
@@ -71,11 +75,66 @@ class GameState:
                     bot_pos,
                     gem_pos,
                     self.wall_positions,
-                    config.width,
-                    config.height,
+                    self.config.width,
+                    self.config.height,
                 )
                 self.path_segments[(bot_pos, gem_pos)] = seg
                 self.distance_matrix[(bot_pos, gem_pos)] = (
                     len(seg) if seg else float("inf")
                 )
             self.last_bot_pos = bot_pos
+
+    @classmethod
+    def from_dict(cls, data: dict, config: GameConfig) -> "GameState":
+        bot = Coords(x=data["bot"][0], y=data["bot"][1])
+        wall = {Wall(position=Coords(x=w[0], y=w[1])) for w in data["wall"]}
+        floor = {Floor(position=Coords(x=f[0], y=f[1])) for f in data["floor"]}
+        visible_gems = [
+            Gem(
+                position=Coords(x=g["position"][0], y=g["position"][1]),
+                ttl=g["ttl"],
+                distance2bot=g.get("distance2bot"),
+                distance2enemies=g.get("distance2enemies", []),
+                reachable=g.get("reachable", False),
+            )
+            for g in data["visible_gems"]
+        ]
+        visible_bots = [
+            EnemyBot(position=Coords(x=b["position"][0], y=b["position"][1]))
+            for b in data.get("visible_bots", [])
+        ]
+        return cls(
+            tick=data["tick"],
+            bot=bot,
+            wall=wall,
+            floor=floor,
+            initiative=data["initiative"],
+            visible_gems=visible_gems,
+            visible_bots=visible_bots,
+            config=config,
+        )
+
+    def update_from_dict(self, data: dict):
+        self.tick = data["tick"]
+        self.bot = Coords(x=data["bot"][0], y=data["bot"][1])
+        self.wall = {Wall(position=Coords(x=w[0], y=w[1])) for w in data["wall"]}
+        self.floor = {Floor(position=Coords(x=f[0], y=f[1])) for f in data["floor"]}
+        self.initiative = data["initiative"]
+        self.visible_gems = [
+            Gem(
+                position=Coords(x=g["position"][0], y=g["position"][1]),
+                ttl=g["ttl"],
+                distance2bot=g.get("distance2bot"),
+                distance2enemies=g.get("distance2enemies", []),
+                reachable=g.get("reachable", False),
+            )
+            for g in data["visible_gems"]
+        ]
+        self.visible_bots = [
+            EnemyBot(position=Coords(x=b["position"][0], y=b["position"][1]))
+            for b in data.get("visible_bots", [])
+        ]
+
+    def refresh(self):
+        self.update_gem_distances()
+        self.update_distance_matrix()

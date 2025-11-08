@@ -39,15 +39,16 @@ def make_game_state(bot_pos=(0, 0), gems=None, walls=None, enemies=None):
         initiative=True,
         visible_gems=gems,
         visible_bots=[EnemyBot(position=Coords(*e)) for e in enemies],
+        config=make_config(),
     )
     game_state.update_gem_distances()
-    game_state.update_distance_matrix(make_config())
+    game_state.update_distance_matrix()
     return game_state
 
 
 def test_navigate_to_gem_moves_toward_gem():
     bot = CollectorBot()
-    bot.config = make_config()
+
     gem = Gem(position=Coords(2, 2), ttl=10)
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
     gem.distance2bot = 4

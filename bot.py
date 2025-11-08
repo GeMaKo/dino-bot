@@ -7,7 +7,6 @@ from typing import Optional
 from bot_logic import (
     get_best_gem_collection_path,
 )
-from bot_utils import parse_gamestate
 from config import (
     DISTANCE_TO_ENEMY,
     RECENT_POSITIONS_LIMIT,
@@ -57,7 +56,6 @@ class CollectorBot:
         >>> bot = CollectorBot()
         >>> bot.width, bot.height, bot.walls = 5, 5, set()
         """
-        self.config: Optional[GameConfig] = None
         self.game_state: Optional[GameState] = None
         self.recent_positions: list[Coords] = []
         self.random_moves_left = 0
@@ -93,16 +91,16 @@ class CollectorBot:
         >>> bot.navigate_to_gem({"bot": [0, 0], "visible_gems": [{"position": [2, 2]}]})
         (0, 1)
         """
-        if self.config is None or self.game_state is None:
+        if self.game_state is None or self.game_state.config is None:
             raise RuntimeError("Bot not initialized. Call initialize() first.")
-        assert self.config is not None
         assert self.game_state is not None
+        assert self.game_state.config is not None
         shortest_path = get_best_gem_collection_path(
             bot_pos=self.game_state.bot,
             gems=reachable_gems,
             walls=self.game_state.wall,
-            width=self.config.width,
-            height=self.config.height,
+            width=self.game_state.config.width,
+            height=self.game_state.config.height,
             distance_matrix=self.game_state.distance_matrix,
             path_segments=self.game_state.path_segments,
             initiative=self.game_state.initiative,
@@ -114,12 +112,14 @@ class CollectorBot:
         return self.game_state.bot
 
     def search_gems(self) -> Coords:
-        if self.config is None or self.game_state is None:
+        if self.game_state is None or self.game_state.config is None:
             raise RuntimeError("Bot not initialized. Call initialize() first.")
-        assert self.config is not None
+        assert self.game_state.config is not None
         assert self.game_state is not None
 
-        center = Coords(self.config.width // 2, self.config.height // 2)
+        center = Coords(
+            self.game_state.config.width // 2, self.game_state.config.height // 2
+        )
         bot_pos = self.game_state.bot
 
         visible_enemies = [e for e in self.game_state.visible_bots if e != bot_pos]
@@ -192,8 +192,8 @@ class CollectorBot:
             bot_pos,
             is_goal=is_goal,
             forbidden=self.game_state.wall_positions,
-            width=self.config.width,
-            height=self.config.height,
+            width=self.game_state.config.width,
+            height=self.game_state.config.height,
             directions=preferred_directions,
         )
         if path and len(path) > 1:
@@ -211,10 +211,10 @@ class CollectorBot:
         move : str
             The direction to move ('N', 'S', 'E', 'W', or 'WAIT').
         """
-        if self.config is None or self.game_state is None:
+        if self.game_state is None or self.game_state.config is None:
             raise RuntimeError("Bot not initialized. Call initialize() first.")
-        assert self.config is not None
         assert self.game_state is not None
+        assert self.game_state.config is not None
 
         # Use pathfinding to determine next move
         # Update recent positions (keep last N, from config)
@@ -268,32 +268,22 @@ class CollectorBot:
         for line in sys.stdin:
             data = json.loads(line)
             if first_tick:
-                self.config = GameConfig(**data.get("config"))
-                random.seed(self.config.bot_seed)
+                config = GameConfig(**data.get("config"))
+                random.seed(config.bot_seed)
                 data.pop("config", None)
                 print(
-                    f"Collector bot (Python) launching on a {self.config.width}x{self.config.height} map",
+                    f"Dinobot (Python) launching on a {config.width}x{config.height} map",
                     file=sys.stderr,
                 )
                 # Initialize game_state with all fields
-                self.game_state = parse_gamestate(data)
+                self.game_state = GameState.from_dict(data, config)
                 first_tick = False
             # Save previous gem positions before overwriting game_state
             else:
                 assert self.game_state is not None
-                # Only update fields that change
-                new_state = parse_gamestate(data)
-                self.game_state.tick = new_state.tick
-                self.game_state.bot = new_state.bot
-                self.game_state.wall = new_state.wall
-                self.game_state.floor = new_state.floor
-                self.game_state.initiative = new_state.initiative
-                self.game_state.visible_gems = new_state.visible_gems
-                self.game_state.visible_bots = new_state.visible_bots
-                # Do NOT overwrite distance_matrix, path_segments, last_gem_positions, last_bot_pos
+                self.game_state.update_from_dict(data)
             assert self.game_state is not None
-            self.game_state.update_gem_distances()
-            self.game_state.update_distance_matrix(self.config)
+            self.game_state.refresh()
 
             move = self.process_game_state()
             print(move, flush=True)
