@@ -1,5 +1,6 @@
 from bot import CollectorBot
-from config import Coords, EnemyBot, GameConfig, GameState, Gem, Wall
+from config import Coords, EnemyBot, GameConfig, Gem, Wall
+from gamestate import GameState
 
 
 def make_config():
@@ -30,7 +31,7 @@ def make_game_state(bot_pos=(0, 0), gems=None, walls=None, enemies=None):
         walls = set()
     if enemies is None:
         enemies = []
-    return GameState(
+    game_state = GameState(
         tick=1,
         bot=Coords(*bot_pos),
         wall={Wall(position=Coords(*w)) for w in walls},
@@ -39,6 +40,9 @@ def make_game_state(bot_pos=(0, 0), gems=None, walls=None, enemies=None):
         visible_gems=gems,
         visible_bots=[EnemyBot(position=Coords(*e)) for e in enemies],
     )
+    game_state.update_gem_distances()
+    game_state.update_distance_matrix(make_config())
+    return game_state
 
 
 def test_navigate_to_gem_moves_toward_gem():
@@ -48,7 +52,6 @@ def test_navigate_to_gem_moves_toward_gem():
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
     gem.distance2bot = 4
     gem.reachable = True
-    bot.enrich_game_state()
     next_pos = bot.navigate_to_gem([gem])
     assert next_pos != bot.game_state.bot
     assert isinstance(next_pos, Coords)
@@ -68,7 +71,6 @@ def test_enrich_game_state_sets_distances_and_reachable():
     bot.config = make_config()
     gem = Gem(position=Coords(2, 2), ttl=10)
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem], enemies=[(4, 4)])
-    bot.enrich_game_state()
     assert bot.game_state.visible_gems[0].distance2bot is not None
     assert isinstance(bot.game_state.visible_gems[0].distance2enemies, list)
     assert isinstance(bot.game_state.visible_gems[0].reachable, bool)

@@ -1,4 +1,5 @@
-from config import Coords, EnemyBot, Floor, GameState, Gem, Wall
+from config import Coords, EnemyBot, Floor, Gem, Wall
+from gamestate import GameState
 
 
 def parse_gamestate(data: dict) -> GameState:

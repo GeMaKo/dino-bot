@@ -1,7 +1,7 @@
 from collections import deque
 from typing import Callable
 
-from config import Coords, Direction, Wall
+from config import Coords, Direction
 
 
 def manhattan(a: Coords, b: Coords) -> int:
@@ -11,7 +11,7 @@ def manhattan(a: Coords, b: Coords) -> int:
 def bfs(
     start: Coords,
     is_goal: Callable[[Coords, list[Coords]], bool],
-    walls: set[Wall],
+    forbidden: set[Coords],
     width: int,
     height: int,
     directions: list[Direction] | None = None,
@@ -26,8 +26,6 @@ def bfs(
     visited = set([start])
     if directions is None:
         directions = [d for d in Direction if d != Direction.WAIT]
-
-    wall_positions = {wall.position for wall in walls}
 
     while queue:
         current_pos, path = queue.popleft()
@@ -57,7 +55,7 @@ def bfs(
             if (
                 0 <= neighbor.x < width
                 and 0 <= neighbor.y < height
-                and neighbor not in wall_positions
+                and neighbor not in forbidden
                 and neighbor not in visited
             ):
                 visited.add(neighbor)
@@ -68,14 +66,14 @@ def bfs(
 def find_path(
     start: Coords,
     goal: Coords,
-    walls: set[Wall],
+    forbidden: set[Coords],
     width: int,
     height: int,
 ) -> list[Coords]:
     path_tuples = bfs(
         start,
         is_goal=lambda pos, path: pos == goal,
-        walls=walls,
+        forbidden=forbidden,
         width=width,
         height=height,
         goal=goal,  # Pass goal for axis prioritization

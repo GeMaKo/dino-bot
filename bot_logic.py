@@ -41,11 +41,6 @@ def check_reachable_gems(gems: list[Gem]) -> list[Gem]:
     for gem in gems:
         if gem.distance2bot is not None:
             gem.reachable = gem.distance2bot < gem.ttl + 1
-        if gem.distance2enemies and gem.distance2bot is not None:
-            min_enemy_dist = min(gem.distance2enemies)
-            gem.reachable = gem.reachable and (
-                gem.distance2bot < min_enemy_dist
-            )  # TODO: check if enemy can reach the gem
     return gems
 
 
@@ -79,7 +74,8 @@ def get_path_to_closest_reachable_gem(
     gems_sorted = sorted(gems, key=lambda gem: manhattan(bot_pos, gem.position))
     gem_to_check = gems_sorted[0]
     shortest_path = None
-    path = find_path(bot_pos, gem_to_check.position, walls, width, height)
+    forbidden = set(walls_pos.position for walls_pos in walls)
+    path = find_path(bot_pos, gem_to_check.position, forbidden, width, height)
     if path and (shortest_path is None or len(path) < len(shortest_path)):
         shortest_path = path
     return shortest_path
@@ -91,11 +87,28 @@ def get_best_gem_collection_path(
     walls: set[Wall],
     width: int,
     height: int,
+    enemies: list[EnemyBot],
+    initiative: bool,
     distance_matrix=None,
     path_segments=None,
 ) -> list[Coords] | None:
     if not gems:
         return None
+
+    # Compute forbidden positions for each step
+    def get_forbidden(step: int) -> set[Coords]:
+        forbidden = set(walls_pos.position for walls_pos in walls)
+        for enemy in enemies:
+            # Current position
+            forbidden.add(enemy.position)
+            # If initiative, add possible next positions
+            if not initiative:
+                # Example: add all adjacent positions (customize as needed)
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    next_pos = Coords(enemy.position.x + dx, enemy.position.y + dy)
+                    if 0 <= next_pos.x < width and 0 <= next_pos.y < height:
+                        forbidden.add(next_pos)
+        return forbidden
 
     # Use passed-in caches if available, otherwise compute
     if distance_matrix is not None and path_segments is not None:
@@ -108,7 +121,7 @@ def get_best_gem_collection_path(
         for i, src in enumerate(positions):
             for j, dst in enumerate(positions):
                 if i != j:
-                    seg = find_path(src, dst, walls, width, height)
+                    seg = find_path(src, dst, get_forbidden(0), width, height)
                     path_segs[(src, dst)] = seg
                     path_lengths[(src, dst)] = len(seg) if seg else float("inf")
 

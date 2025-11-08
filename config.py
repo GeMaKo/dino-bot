@@ -3,7 +3,7 @@ from enum import Enum
 from functools import lru_cache
 
 RECENT_POSITIONS_LIMIT = 5
-DISTANCE_TO_ENEMY = 3
+DISTANCE_TO_ENEMY = 5
 RANDOM_MOVES = 5
 
 _STR_MAP = {
@@ -88,18 +88,3 @@ class Wall:
 @dataclass(frozen=True)
 class Floor:
     position: Coords
-
-
-@dataclass
-class GameState:
-    tick: int
-    bot: Coords
-    wall: set[Wall]
-    floor: set[Floor]
-    initiative: bool
-    visible_gems: list[Gem]
-    visible_bots: list[EnemyBot]
-    distance_matrix: dict = field(default_factory=dict)
-    path_segments: dict = field(default_factory=dict)
-    last_gem_positions: set[Coords] = field(default_factory=set)
-    last_bot_pos: Coords | None = None

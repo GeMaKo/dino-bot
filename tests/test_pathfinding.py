@@ -1,4 +1,4 @@
-from config import Coords, Direction, Wall
+from config import Coords, Direction
 from pathfinding import bfs, find_path, manhattan
 
 
@@ -19,7 +19,7 @@ def test_bfs_finds_path():
     path = bfs(
         start,
         is_goal=lambda pos, path: pos == goal,
-        walls=walls,
+        forbidden=walls,
         width=width,
         height=height,
         directions=[Direction.RIGHT],
@@ -30,12 +30,12 @@ def test_bfs_finds_path():
 def test_bfs_with_wall():
     start = Coords(0, 0)
     goal = Coords(2, 0)
-    walls = {Wall(position=Coords(1, 0))}
+    walls = {Coords(1, 0)}
     width, height = 3, 1
     path = bfs(
         start,
         is_goal=lambda pos, path: pos == goal,
-        walls=walls,
+        forbidden=walls,
         width=width,
         height=height,
         directions=[Direction.RIGHT],
@@ -46,7 +46,7 @@ def test_bfs_with_wall():
 def test_find_path_grid():
     start = Coords(0, 0)
     goal = Coords(2, 2)
-    walls = {Wall(position=Coords(1, 1))}
+    walls = {Coords(1, 1)}
     width, height = 3, 3
     path = find_path(start, goal, walls, width, height)
     assert path[0] == start
@@ -67,10 +67,10 @@ def test_find_path_unreachable():
     start = Coords(0, 0)
     goal = Coords(2, 2)
     walls = {
-        Wall(position=Coords(1, 0)),
-        Wall(position=Coords(0, 1)),
-        Wall(position=Coords(1, 2)),
-        Wall(position=Coords(2, 1)),
+        Coords(1, 0),
+        Coords(0, 1),
+        Coords(1, 2),
+        Coords(2, 1),
     }
     width, height = 3, 3
     path = find_path(start, goal, walls, width, height)
