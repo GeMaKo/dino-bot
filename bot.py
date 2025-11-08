@@ -178,8 +178,8 @@ class CollectorBot:
                         and pos_center_dist < bot_center_dist
                     )
 
-                # Phase 2: Stay close to enemy (distance 2), but keep center advantage
-                return pos_center_dist < enemy_center_dist and enemy_dist == 2
+                # Phase 2: Stay close to enemy (distance 3), but keep center advantage
+                return pos_center_dist < enemy_center_dist and enemy_dist == 3
 
             # No enemy: just move closer to center
             return manhattan(pos, center) < manhattan(bot_pos, center)
