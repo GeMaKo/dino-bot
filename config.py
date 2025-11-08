@@ -99,3 +99,7 @@ class GameState:
     initiative: bool
     visible_gems: list[Gem]
     visible_bots: list[EnemyBot]
+    distance_matrix: dict = field(default_factory=dict)
+    path_segments: dict = field(default_factory=dict)
+    last_gem_positions: set[Coords] = field(default_factory=set)
+    last_bot_pos: Coords | None = None

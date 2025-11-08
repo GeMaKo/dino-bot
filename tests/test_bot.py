@@ -48,6 +48,7 @@ def test_navigate_to_gem_moves_toward_gem():
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
     gem.distance2bot = 4
     gem.reachable = True
+    bot.enrich_game_state()
     next_pos = bot.navigate_to_gem([gem])
     assert next_pos != bot.game_state.bot
     assert isinstance(next_pos, Coords)

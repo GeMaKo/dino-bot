@@ -6,8 +6,8 @@ from typing import Optional
 
 from bot_logic import (
     check_reachable_gems,
+    get_best_gem_collection_path,
     get_distances,
-    get_path_to_closest_reachable_gem,
 )
 from bot_utils import parse_gamestate
 from config import (
@@ -20,7 +20,7 @@ from config import (
     Gem,
     Phase,
 )
-from pathfinding import bfs, manhattan
+from pathfinding import bfs, find_path, manhattan
 
 
 class CollectorBot:
@@ -99,14 +99,14 @@ class CollectorBot:
             raise RuntimeError("Bot not initialized. Call initialize() first.")
         assert self.config is not None
         assert self.game_state is not None
-        shortest_path = get_path_to_closest_reachable_gem(
-            self.game_state.bot,
-            reachable_gems,
-            self.game_state.wall,
-            self.config.width,
-            self.config.height,
-            self.game_state.visible_bots,
-            self.game_state.initiative,
+        shortest_path = get_best_gem_collection_path(
+            bot_pos=self.game_state.bot,
+            gems=reachable_gems,
+            walls=self.game_state.wall,
+            width=self.config.width,
+            height=self.config.height,
+            distance_matrix=self.game_state.distance_matrix,
+            path_segments=self.game_state.path_segments,
         )
         if shortest_path and len(shortest_path) > 1:
             next_pos = shortest_path[1]  # Next step
@@ -201,10 +201,9 @@ class CollectorBot:
         return bot_pos
 
     def enrich_game_state(self) -> None:
-        """
-        Enrich the current game state with additional analysis.
-        """
         assert self.game_state is not None
+        assert self.config is not None
+
         # Compute distances from bot to gems
         self.game_state.visible_gems = get_distances(
             self.game_state.bot,
@@ -215,6 +214,51 @@ class CollectorBot:
         self.game_state.visible_gems = check_reachable_gems(
             self.game_state.visible_gems
         )
+
+        # Prepare current positions
+        gem_positions = set(gem.position for gem in self.game_state.visible_gems)
+
+        bot_pos = self.game_state.bot
+
+        # If gems changed, recalculate full matrix
+        if self.game_state.last_gem_positions != gem_positions:
+            print("Updating full distance matrix and path segments", file=sys.stderr)
+            self.game_state.distance_matrix = {}
+            self.game_state.path_segments = {}
+            all_positions = [bot_pos] + list(gem_positions)
+            for i, src in enumerate(all_positions):
+                for j, dst in enumerate(all_positions):
+                    if i != j:
+                        seg = find_path(
+                            src,
+                            dst,
+                            self.game_state.wall,
+                            self.config.width,
+                            self.config.height,
+                        )
+                        self.game_state.path_segments[(src, dst)] = seg
+                        self.game_state.distance_matrix[(src, dst)] = (
+                            len(seg) if seg else float("inf")
+                        )
+            self.game_state.last_gem_positions = set(
+                gem_positions
+            )  # <-- Always assign a set!
+            self.game_state.last_bot_pos = bot_pos
+        elif self.game_state.last_bot_pos != bot_pos:
+            print("Updating bot-to-gem distances", file=sys.stderr)
+            for gem_pos in gem_positions:
+                seg = find_path(
+                    bot_pos,
+                    gem_pos,
+                    self.game_state.wall,
+                    self.config.width,
+                    self.config.height,
+                )
+                self.game_state.path_segments[(bot_pos, gem_pos)] = seg
+                self.game_state.distance_matrix[(bot_pos, gem_pos)] = (
+                    len(seg) if seg else float("inf")
+                )
+            self.game_state.last_bot_pos = bot_pos
 
     def process_game_state(self) -> str:
         """
@@ -260,10 +304,6 @@ class CollectorBot:
         dy = next_pos.y - self.game_state.bot.y
         # Find the matching Direction enum for the delta
         move_direction = Direction.from_delta(Coords(x=dx, y=dy))
-        # print(
-        #    f"Bot at {self.game_state.bot}, moving to {next_pos} via {move_direction}",
-        #    file=sys.stderr,
-        # )
         move = Direction.to_str(move_direction)
         return move
 
@@ -296,10 +336,26 @@ class CollectorBot:
                     f"Collector bot (Python) launching on a {self.config.width}x{self.config.height} map",
                     file=sys.stderr,
                 )
-            self.game_state = parse_gamestate(data)
+                # Initialize game_state with all fields
+                self.game_state = parse_gamestate(data)
+                first_tick = False
+            # Save previous gem positions before overwriting game_state
+            else:
+                assert self.game_state is not None
+                # Only update fields that change
+                new_state = parse_gamestate(data)
+                self.game_state.tick = new_state.tick
+                self.game_state.bot = new_state.bot
+                self.game_state.wall = new_state.wall
+                self.game_state.floor = new_state.floor
+                self.game_state.initiative = new_state.initiative
+                self.game_state.visible_gems = new_state.visible_gems
+                self.game_state.visible_bots = new_state.visible_bots
+                # Do NOT overwrite distance_matrix, path_segments, last_gem_positions, last_bot_pos
+
             move = self.process_game_state()
             print(move, flush=True)
-            first_tick = False
+            self.game_state.last_bot_pos = self.game_state.bot
 
 
 if __name__ == "__main__":
