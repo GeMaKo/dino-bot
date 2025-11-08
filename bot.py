@@ -249,7 +249,7 @@ class CollectorBot:
         else:
             next_pos = self.navigate_to_gem(reachable_gems)
             if self.bot_phase == Phase.SEARCH_GEMS:
-                print(f"Navigating to gem at {next_pos}", file=sys.stderr)
+                print("Navigating to gem", file=sys.stderr)
             self.bot_phase = Phase.COLLECT_GEMS
 
             if any(gem.position == next_pos for gem in self.game_state.visible_gems):
