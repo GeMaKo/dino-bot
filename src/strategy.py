@@ -2,7 +2,8 @@ import sys
 from abc import ABC, abstractmethod
 from typing import Callable, List, Optional, Tuple
 
-from src.config import DISTANCE_TO_ENEMY
+from src.bot_logic import get_best_gem_collection_path
+from src.config import CENTER_MOVE_WEIGHT, CENTER_STAY_WEIGHT, DISTANCE_TO_ENEMY
 from src.gamestate import GameState
 from src.pathfinding import find_path
 from src.schemas import Coords
@@ -89,6 +90,21 @@ def greedy_planner(game_state: GameState) -> List[Coords]:
     return candidates
 
 
+def reachable_planner(game_state: GameState) -> List[Coords]:
+    """Plan moves towards reachable visible gems only."""
+    if game_state.config is None:
+        print("GameConfig must be set to plan moves", file=sys.stderr)
+        return [game_state.bot]
+    candidates = [
+        gem.position
+        for gem in game_state.visible_gems
+        if gem.distance2bot is not None and gem.reachable
+    ]
+    if not candidates:
+        candidates = [game_state.bot]
+    return candidates
+
+
 def greedy_evaluator(game_state: GameState, move: Coords) -> float:
     """Evaluate moves using path length from bot to move."""
     if game_state.config is None:
@@ -100,6 +116,28 @@ def greedy_evaluator(game_state: GameState, move: Coords) -> float:
         forbidden=game_state.wall_positions,
         width=game_state.config.width,
         height=game_state.config.height,
+    )
+    return len(path) if path else float("inf")
+
+
+def tsm_evaluator(game_state: GameState, move: Coords) -> float:
+    """Evaluate moves for TSV strategy (stub implementation)."""
+    if game_state.config is None:
+        return float("inf")
+    # Filter gems to those at the candidate position
+    gems = [gem for gem in game_state.visible_gems if gem.position == move]
+    if not gems:
+        return float("inf")
+    path = get_best_gem_collection_path(
+        bot_pos=game_state.bot,
+        gems=gems,
+        walls=game_state.wall,
+        width=game_state.config.width,
+        height=game_state.config.height,
+        enemies=game_state.visible_bots,
+        initiative=game_state.initiative,
+        distance_matrix=game_state.distance_matrix,
+        path_segments=game_state.path_segments,
     )
     return len(path) if path else float("inf")
 
@@ -162,7 +200,7 @@ def advanced_search_planner(game_state: GameState) -> List[Coords]:
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
     ]
     # Filter out walls, out-of-bounds, and recent positions
-    candidates = [
+    candidates = [bot_pos] + [
         pos
         for pos in directions
         if 0 <= pos.x < game_state.config.width
@@ -189,6 +227,13 @@ def advanced_search_evaluator(game_state: GameState, move: Coords) -> float:
         key=lambda e: abs(e.position.x - bot_pos.x) + abs(e.position.y - bot_pos.y),
         default=None,
     )
+    center = Coords(game_state.config.width // 2, game_state.config.height // 2)
+    if bot_pos == center and move == center:
+        return CENTER_STAY_WEIGHT  # Large negative score to prefer WAIT/stay
+    # Penalize moving away from center if already there
+    if bot_pos == center and move != center:
+        return CENTER_MOVE_WEIGHT  # Large positive score to discourage leaving center
+
     center_dist = abs(move.x - center.x) + abs(move.y - center.y)
     score = center_dist
     if closest_enemy:
@@ -211,13 +256,3 @@ def advanced_search_evaluator(game_state: GameState, move: Coords) -> float:
         else:
             score += center_dist
     return score
-
-
-def advanced_search_tie_breaker(
-    scored_candidates: List[Tuple[Coords, float]],
-) -> Optional[Coords]:
-    """Pick move with minimal score."""
-    if not scored_candidates:
-        return None
-    best = min(scored_candidates, key=lambda x: x[1])[0]
-    return best

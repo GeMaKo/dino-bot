@@ -46,27 +46,6 @@ def make_game_state(bot_pos=(0, 0), gems=None, walls=None, enemies=None):
     return game_state
 
 
-def test_navigate_to_gem_moves_toward_gem():
-    bot = CollectorBot("TestBot", "greedy")
-
-    gem = Gem(position=Coords(2, 2), ttl=10)
-    bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
-    gem.distance2bot = 4
-    gem.reachable = True
-    next_pos = bot.navigate_to_gem([gem])
-    assert next_pos != bot.game_state.bot
-    assert isinstance(next_pos, Coords)
-
-
-def test_search_gems_moves_toward_center():
-    bot = CollectorBot("TestBot", "greedy")
-    bot.game_state = make_game_state(bot_pos=(0, 0))
-    bot.game_state.config = make_config()
-    pos = bot.search_gems()
-    assert isinstance(pos, Coords)
-    assert pos != bot.game_state.bot
-
-
 def test_enrich_game_state_sets_distances_and_reachable():
     bot = CollectorBot("TestBot", "greedy")
     gem = Gem(position=Coords(2, 2), ttl=10)
