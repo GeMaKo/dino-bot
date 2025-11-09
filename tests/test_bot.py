@@ -47,7 +47,7 @@ def make_game_state(bot_pos=(0, 0), gems=None, walls=None, enemies=None):
 
 
 def test_navigate_to_gem_moves_toward_gem():
-    bot = CollectorBot("TestBot")
+    bot = CollectorBot("TestBot", "greedy")
 
     gem = Gem(position=Coords(2, 2), ttl=10)
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
@@ -59,7 +59,7 @@ def test_navigate_to_gem_moves_toward_gem():
 
 
 def test_search_gems_moves_toward_center():
-    bot = CollectorBot("TestBot")
+    bot = CollectorBot("TestBot", "greedy")
     bot.game_state = make_game_state(bot_pos=(0, 0))
     bot.game_state.config = make_config()
     pos = bot.search_gems()
@@ -68,7 +68,7 @@ def test_search_gems_moves_toward_center():
 
 
 def test_enrich_game_state_sets_distances_and_reachable():
-    bot = CollectorBot("TestBot")
+    bot = CollectorBot("TestBot", "greedy")
     gem = Gem(position=Coords(2, 2), ttl=10)
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem], enemies=[(4, 4)])
     bot.game_state.config = make_config()
@@ -78,7 +78,7 @@ def test_enrich_game_state_sets_distances_and_reachable():
 
 
 def test_process_game_state_returns_move():
-    bot = CollectorBot("TestBot")
+    bot = CollectorBot("TestBot", "greedy")
     gem = Gem(position=Coords(2, 2), ttl=10)
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
     bot.game_state.config = make_config()
@@ -89,7 +89,7 @@ def test_process_game_state_returns_move():
 
 
 def test_run_reads_and_prints(monkeypatch, capsys):
-    bot = CollectorBot("TestBot")
+    bot = CollectorBot("TestBot", "greedy")
     config = make_config()
     data = {
         "config": config.__dict__,

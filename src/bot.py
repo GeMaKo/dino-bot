@@ -19,7 +19,7 @@ from src.schemas import (
     Gem,
     Phase,
 )
-from src.strategy import Strategy
+from src.strategy_register import STRATEGY_REGISTRY
 
 
 class CollectorBot:
@@ -38,7 +38,7 @@ class CollectorBot:
         Set of blocked positions (x, y) that cannot be traversed (set on first tick).
     """
 
-    def __init__(self, name, strategy: Strategy | None = None):
+    def __init__(self, name: str, strategy: str):
         """
         Initialize CollectorBot with uninitialized map configuration.
 
@@ -46,7 +46,10 @@ class CollectorBot:
 
         """
         self.name = name
-        self.strategy = "CollectorBot"
+        strategy_cls = STRATEGY_REGISTRY.get(strategy)
+        if strategy_cls is None:
+            raise ValueError(f"Unknown strategy: {strategy}")
+        self.strategy = strategy_cls()
         self.game_state: Optional[GameState] = None
         self.recent_positions: list[Coords] = []
         self.random_moves_left = 0
