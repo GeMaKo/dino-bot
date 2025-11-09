@@ -1,7 +1,7 @@
 import itertools
 
-from src.config import Coords, EnemyBot, Gem, Wall
 from src.pathfinding import find_path, manhattan
+from src.schemas import Coords, EnemyBot, Gem, Wall
 
 
 def get_bot2gems_distances(

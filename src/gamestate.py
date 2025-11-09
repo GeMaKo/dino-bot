@@ -6,8 +6,8 @@ from src.bot_logic import (
     check_reachable_gems,
     get_distances,
 )
-from src.config import Coords, EnemyBot, Floor, GameConfig, Gem, Wall
 from src.pathfinding import find_path
+from src.schemas import Coords, EnemyBot, Floor, GameConfig, Gem, Wall
 
 
 @dataclass
@@ -68,7 +68,7 @@ class GameState:
                         )
             self.last_gem_positions = set(gem_positions)
             self.last_bot_pos = bot_pos
-        elif self.last_bot_pos != bot_pos:
+        elif self.last_gem_positions and self.last_bot_pos != bot_pos:
             print("Updating bot-to-gem distances", file=sys.stderr)
             for gem_pos in gem_positions:
                 seg = find_path(

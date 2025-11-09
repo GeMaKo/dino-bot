@@ -9,14 +9,17 @@ from src.bot_logic import (
 from src.config import (
     DISTANCE_TO_ENEMY,
     RECENT_POSITIONS_LIMIT,
+)
+from src.gamestate import GameState
+from src.pathfinding import bfs, manhattan
+from src.schemas import (
     Coords,
     Direction,
     GameConfig,
     Gem,
     Phase,
 )
-from src.gamestate import GameState
-from src.pathfinding import bfs, manhattan
+from src.strategy import Strategy
 
 
 class CollectorBot:
@@ -33,27 +36,14 @@ class CollectorBot:
         Height of the map (set on first tick).
     walls : set of tuple of int
         Set of blocked positions (x, y) that cannot be traversed (set on first tick).
-
-    Examples
-    --------
-    >>> bot = CollectorBot()
-    >>> bot.width, bot.height, bot.walls = 5, 5, set()
     """
 
-    def __init__(self, name, strategy: str = "CollectorBot"):
+    def __init__(self, name, strategy: Strategy | None = None):
         """
         Initialize CollectorBot with uninitialized map configuration.
 
         Attributes are set on the first tick via process_input.
 
-        Returns
-        -------
-        None
-
-        Examples
-        --------
-        >>> bot = CollectorBot()
-        >>> bot.width, bot.height, bot.walls = 5, 5, set()
         """
         self.name = name
         self.strategy = "CollectorBot"
@@ -75,22 +65,6 @@ class CollectorBot:
         Uses pathfinding to select the shortest path to one of the top 3 closest gems (by Manhattan distance).
         If no gems are visible, the bot stays in its current position.
 
-        Parameters
-        ----------
-        game_state : dict
-            The current game state containing bot position and visible gems.
-
-        Returns
-        -------
-        next_pos : tuple of int
-            The next position (x, y) for the bot to move to. If no gems, returns current position.
-
-        Examples
-        --------
-        >>> bot = CollectorBot()
-        >>> bot.width, bot.height, bot.walls = 5, 5, set()
-        >>> bot.navigate_to_gem({"bot": [0, 0], "visible_gems": [{"position": [2, 2]}]})
-        (0, 1)
         """
         if self.game_state is None or self.game_state.config is None:
             raise RuntimeError("Bot not initialized. Call initialize() first.")

@@ -1,6 +1,6 @@
 from src.bot import CollectorBot
-from src.config import Coords, EnemyBot, GameConfig, Gem, Wall
 from src.gamestate import GameState
+from src.schemas import Coords, EnemyBot, GameConfig, Gem, Wall
 
 
 def make_config():
