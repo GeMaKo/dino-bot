@@ -1,5 +1,5 @@
-from config import Coords, Direction
-from pathfinding import bfs, find_path, manhattan
+from src.config import Coords, Direction
+from src.pathfinding import bfs, find_path, manhattan
 
 
 def test_manhattan_distance():

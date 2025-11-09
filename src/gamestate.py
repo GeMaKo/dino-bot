@@ -2,12 +2,12 @@ import sys
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from bot_logic import (
+from src.bot_logic import (
     check_reachable_gems,
     get_distances,
 )
-from config import Coords, EnemyBot, Floor, GameConfig, Gem, Wall
-from pathfinding import find_path
+from src.config import Coords, EnemyBot, Floor, GameConfig, Gem, Wall
+from src.pathfinding import find_path
 
 
 @dataclass

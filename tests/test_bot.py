@@ -1,6 +1,6 @@
-from bot import CollectorBot
-from config import Coords, EnemyBot, GameConfig, Gem, Wall
-from gamestate import GameState
+from src.bot import CollectorBot
+from src.config import Coords, EnemyBot, GameConfig, Gem, Wall
+from src.gamestate import GameState
 
 
 def make_config():
@@ -47,7 +47,7 @@ def make_game_state(bot_pos=(0, 0), gems=None, walls=None, enemies=None):
 
 
 def test_navigate_to_gem_moves_toward_gem():
-    bot = CollectorBot()
+    bot = CollectorBot("TestBot")
 
     gem = Gem(position=Coords(2, 2), ttl=10)
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
@@ -59,29 +59,29 @@ def test_navigate_to_gem_moves_toward_gem():
 
 
 def test_search_gems_moves_toward_center():
-    bot = CollectorBot()
-    bot.config = make_config()
+    bot = CollectorBot("TestBot")
     bot.game_state = make_game_state(bot_pos=(0, 0))
+    bot.game_state.config = make_config()
     pos = bot.search_gems()
     assert isinstance(pos, Coords)
     assert pos != bot.game_state.bot
 
 
 def test_enrich_game_state_sets_distances_and_reachable():
-    bot = CollectorBot()
-    bot.config = make_config()
+    bot = CollectorBot("TestBot")
     gem = Gem(position=Coords(2, 2), ttl=10)
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem], enemies=[(4, 4)])
+    bot.game_state.config = make_config()
     assert bot.game_state.visible_gems[0].distance2bot is not None
     assert isinstance(bot.game_state.visible_gems[0].distance2enemies, list)
     assert isinstance(bot.game_state.visible_gems[0].reachable, bool)
 
 
 def test_process_game_state_returns_move():
-    bot = CollectorBot()
-    bot.config = make_config()
+    bot = CollectorBot("TestBot")
     gem = Gem(position=Coords(2, 2), ttl=10)
     bot.game_state = make_game_state(bot_pos=(0, 0), gems=[gem])
+    bot.game_state.config = make_config()
     gem.distance2bot = 4
     gem.reachable = True
     move = bot.process_game_state()
@@ -89,7 +89,7 @@ def test_process_game_state_returns_move():
 
 
 def test_run_reads_and_prints(monkeypatch, capsys):
-    bot = CollectorBot()
+    bot = CollectorBot("TestBot")
     config = make_config()
     data = {
         "config": config.__dict__,

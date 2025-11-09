@@ -1,7 +1,7 @@
 from collections import deque
 from typing import Callable
 
-from config import Coords, Direction
+from src.config import Coords, Direction
 
 
 def manhattan(a: Coords, b: Coords) -> int:
