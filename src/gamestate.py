@@ -24,6 +24,14 @@ class GameState:
     last_gem_positions: set[Coords] = field(default_factory=set)
     last_bot_pos: Coords | None = None
     config: GameConfig | None = field(default=None)
+    current_strategy: str = field(default="")
+    debug_mode: bool = field(default=False)
+    recent_positions: list[Coords] = field(default_factory=list)
+
+    def update_recent_positions(self, limit: int):
+        self.recent_positions.append(self.bot)
+        if len(self.recent_positions) > limit:
+            self.recent_positions.pop(0)
 
     @cached_property
     def wall_positions(self) -> set[Coords]:
@@ -48,7 +56,11 @@ class GameState:
         gem_positions = set(gem.position for gem in self.visible_gems if gem.reachable)
         bot_pos = self.bot
         if self.last_gem_positions != gem_positions:
-            print("Updating full distance matrix and path segments", file=sys.stderr)
+            if self.debug_mode:
+                print(
+                    "[GameState] Updating full distance matrix and path segments",
+                    file=sys.stderr,
+                )
             self.distance_matrix = {}
             self.path_segments = {}
             all_positions = [bot_pos] + list(gem_positions)
@@ -69,7 +81,8 @@ class GameState:
             self.last_gem_positions = set(gem_positions)
             self.last_bot_pos = bot_pos
         elif self.last_gem_positions and self.last_bot_pos != bot_pos:
-            print("Updating bot-to-gem distances", file=sys.stderr)
+            if self.debug_mode:
+                print("[GameState] Updating bot-to-gem distances", file=sys.stderr)
             for gem_pos in gem_positions:
                 seg = find_path(
                     bot_pos,

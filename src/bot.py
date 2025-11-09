@@ -38,7 +38,7 @@ class CollectorBot:
         Set of blocked positions (x, y) that cannot be traversed (set on first tick).
     """
 
-    def __init__(self, name: str, strategy: str):
+    def __init__(self, name: str, strategy: str, debug_mode: bool = False):
         """
         Initialize CollectorBot with uninitialized map configuration.
 
@@ -49,7 +49,7 @@ class CollectorBot:
         strategy_cls = STRATEGY_REGISTRY.get(strategy)
         if strategy_cls is None:
             raise ValueError(f"Unknown strategy: {strategy}")
-        self.strategy = strategy_cls()
+        self.strategy = strategy_cls() if callable(strategy_cls) else strategy_cls
         self.game_state: Optional[GameState] = None
         self.recent_positions: list[Coords] = []
         self.random_moves_left = 0
@@ -60,6 +60,7 @@ class CollectorBot:
             Direction.DOWN,
         ]
         self.bot_phase = Phase.SEARCH_GEMS
+        self.debug_mode = debug_mode
 
     def navigate_to_gem(self, reachable_gems: list[Gem]) -> Coords:
         """
@@ -194,32 +195,16 @@ class CollectorBot:
         assert self.game_state is not None
         assert self.game_state.config is not None
 
+        # Use the strategy to decide the next position
+        next_pos = self.strategy.decide(self.game_state)
+
         # Use pathfinding to determine next move
         # Update recent positions (keep last N, from config)
-        self.recent_positions.append(self.game_state.bot)
-        if len(self.recent_positions) > RECENT_POSITIONS_LIMIT:
-            self.recent_positions.pop(0)
-
-        # Check for search or navigate to gems
-        reachable_gems = [gem for gem in self.game_state.visible_gems if gem.reachable]
-        if not reachable_gems:
-            next_pos = self.search_gems()
-            if self.bot_phase == Phase.COLLECT_GEMS:
-                print("No reachable gems, switching to search mode", file=sys.stderr)
-            self.bot_phase = Phase.SEARCH_GEMS
-        else:
-            next_pos = self.navigate_to_gem(reachable_gems)
-            if self.bot_phase == Phase.SEARCH_GEMS:
-                print("Navigating to gem", file=sys.stderr)
-            self.bot_phase = Phase.COLLECT_GEMS
-
-            if any(gem.position == next_pos for gem in self.game_state.visible_gems):
-                self.recent_positions.clear()
+        self.game_state.update_recent_positions(RECENT_POSITIONS_LIMIT)
 
         # Map position delta to direction
         dx = next_pos.x - self.game_state.bot.x
         dy = next_pos.y - self.game_state.bot.y
-        # Find the matching Direction enum for the delta
         move_direction = Direction.from_delta(Coords(x=dx, y=dy))
         move = Direction.to_str(move_direction)
         return move
@@ -255,6 +240,7 @@ class CollectorBot:
                 )
                 # Initialize game_state with all fields
                 self.game_state = GameState.from_dict(data, config)
+                self.game_state.debug_mode = self.debug_mode
                 first_tick = False
             # Save previous gem positions before overwriting game_state
             else:

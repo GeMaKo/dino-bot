@@ -2,4 +2,5 @@ NAME = "Dinobot"
 RECENT_POSITIONS_LIMIT = 5
 DISTANCE_TO_ENEMY = 5
 RANDOM_MOVES = 5
-STRATEGY = "greedy"
+STRATEGY = "advanced_greedy"
+DEBUG_MODE = False
