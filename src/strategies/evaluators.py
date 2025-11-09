@@ -1,0 +1,104 @@
+import sys
+
+from src.bot_logic import get_best_gem_collection_path
+from src.config import CENTER_MOVE_WEIGHT, CENTER_STAY_WEIGHT, DISTANCE_TO_ENEMY
+from src.gamestate import GameState
+from src.pathfinding import find_path
+from src.schemas import Coords
+
+
+def greedy_evaluator(game_state: GameState, move: Coords) -> float:
+    """Evaluate moves using path length from bot to move."""
+    if game_state.config is None:
+        print("GameConfig must be set to evaluate moves", file=sys.stderr)
+        return float("inf")
+    path = find_path(
+        start=game_state.bot,
+        goal=move,
+        forbidden=game_state.wall_positions,
+        width=game_state.config.width,
+        height=game_state.config.height,
+    )
+    return len(path) if path else float("inf")
+
+
+def tsm_evaluator(game_state: GameState, move: Coords) -> float:
+    """Evaluate moves for TSV strategy (stub implementation)."""
+    if game_state.config is None:
+        return float("inf")
+    # Filter gems to those at the candidate position
+    gems = [gem for gem in game_state.visible_gems if gem.position == move]
+    if not gems:
+        return float("inf")
+    path = get_best_gem_collection_path(
+        bot_pos=game_state.bot,
+        gems=gems,
+        walls=game_state.wall,
+        width=game_state.config.width,
+        height=game_state.config.height,
+        enemies=game_state.visible_bots,
+        initiative=game_state.initiative,
+        distance_matrix=game_state.distance_matrix,
+        path_segments=game_state.path_segments,
+    )
+    return len(path) if path else float("inf")
+
+
+def simple_search_evaluator(game_state: GameState, move: Coords) -> float:
+    """Score moves by shortest path length to center (lower is better)."""
+    if game_state.config is None:
+        return float("inf")
+    center = Coords(game_state.config.width // 2, game_state.config.height // 2)
+    path = find_path(
+        start=move,
+        goal=center,
+        forbidden=game_state.wall_positions,
+        width=game_state.config.width,
+        height=game_state.config.height,
+    )
+    return len(path) if path else float("inf")
+
+
+def advanced_search_evaluator(game_state: GameState, move: Coords) -> float:
+    """Score moves by center bias and enemy avoidance."""
+    assert game_state is not None
+    assert game_state.config is not None
+    if game_state.config is None:
+        return float("inf")
+    center = Coords(game_state.config.width // 2, game_state.config.height // 2)
+    bot_pos = game_state.bot
+    visible_enemies = game_state.visible_bots
+    closest_enemy = min(
+        visible_enemies,
+        key=lambda e: abs(e.position.x - bot_pos.x) + abs(e.position.y - bot_pos.y),
+        default=None,
+    )
+    center = Coords(game_state.config.width // 2, game_state.config.height // 2)
+    if bot_pos == center and move == center:
+        return CENTER_STAY_WEIGHT  # Large negative score to prefer WAIT/stay
+    # Penalize moving away from center if already there
+    if bot_pos == center and move != center:
+        return CENTER_MOVE_WEIGHT  # Large positive score to discourage leaving center
+
+    center_dist = abs(move.x - center.x) + abs(move.y - center.y)
+    score = center_dist
+    if closest_enemy:
+        enemy_center_dist = abs(closest_enemy.position.x - center.x) + abs(
+            closest_enemy.position.y - center.y
+        )
+        bot_center_dist = abs(bot_pos.x - center.x) + abs(bot_pos.y - center.y)
+        enemy_dist = abs(move.x - closest_enemy.position.x) + abs(
+            move.y - closest_enemy.position.y
+        )
+        # If bot is at least DISTANCE_TO_ENEMY steps closer to center than enemy, move towards enemy
+        if bot_center_dist <= enemy_center_dist - DISTANCE_TO_ENEMY:
+            score += enemy_dist
+        # Otherwise, move towards center
+        elif bot_center_dist >= enemy_center_dist:
+            score += center_dist
+        # Stay close to enemy (distance DISTANCE_TO_ENEMY), but keep center advantage
+        elif center_dist < enemy_center_dist:
+            score += abs(enemy_dist - DISTANCE_TO_ENEMY) * 10 + center_dist
+        else:
+            score += center_dist
+    return score

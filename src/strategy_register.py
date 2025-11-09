@@ -1,15 +1,19 @@
-from src.strategy import (
+from src.strategies.evaluators import (
+    advanced_search_evaluator,
+    greedy_evaluator,
+    simple_search_evaluator,
+    tsm_evaluator,
+)
+from src.strategies.planners import (
+    advanced_search_planner,
+    greedy_planner,
+    simple_search_planner,
+)
+from src.strategies.schemas import (
     GlobalGreedyStrategy,
     LocalStrategy,
     Strategy,
-    advanced_search_evaluator,
-    advanced_search_planner,
-    greedy_evaluator,
-    greedy_planner,
-    simple_search_evaluator,
-    simple_search_planner,
     simple_tie_breaker,
-    tsm_evaluator,
 )
 
 
