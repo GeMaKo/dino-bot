@@ -37,13 +37,9 @@ def advanced_search_planner(game_state: GameState) -> list[Coords]:
     if game_state.config is None:
         print("GameConfig must be set to plan moves", file=sys.stderr)
         return [game_state.bot]
-    bot_pos = game_state.bot
-    directions = [
-        Coords(bot_pos.x + dx, bot_pos.y + dy)
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-    ]
+    directions = game_state.bot_adjacent_positions
     # Filter out walls, out-of-bounds, and recent positions
-    candidates = [bot_pos] + [
+    candidates = [game_state.bot] + [
         pos
         for pos in directions
         if 0 <= pos.x < game_state.config.width
@@ -61,10 +57,7 @@ def simple_search_planner(game_state: GameState) -> list[Coords]:
     if game_state.config is None:
         print("GameConfig must be set to plan moves", file=sys.stderr)
         return [game_state.bot]
-    directions = [
-        Coords(game_state.bot.x + dx, game_state.bot.y + dy)
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-    ]
+    directions = game_state.bot_adjacent_positions
     # Filter out walls and out-of-bounds
     candidates = [
         pos

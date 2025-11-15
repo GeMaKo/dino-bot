@@ -5,6 +5,7 @@ from src.config import CENTER_MOVE_WEIGHT, CENTER_STAY_WEIGHT, DISTANCE_TO_ENEMY
 from src.gamestate import GameState
 from src.pathfinding import find_path
 from src.schemas import Coords
+from src.strategies.tactics import analyze_gem_direction_and_block
 
 
 def greedy_evaluator(game_state: GameState, move: Coords) -> float:
@@ -20,6 +21,32 @@ def greedy_evaluator(game_state: GameState, move: Coords) -> float:
         height=game_state.config.height,
     )
     return len(path) if path else float("inf")
+
+
+def greedy_blocking_evaluator(game_state: GameState, move: Coords) -> float:
+    if game_state.config is None:
+        print("GameConfig must be set to evaluate moves", file=sys.stderr)
+        return float("inf")
+    path = find_path(
+        start=game_state.bot,
+        goal=move,
+        forbidden=game_state.wall_positions,
+        width=game_state.config.width,
+        height=game_state.config.height,
+    )
+    score = len(path) if path else float("inf")
+    # Blocking logic
+    if game_state.initiative:
+        for enemy in game_state.visible_bots:
+            for gem in game_state.visible_gems:
+                analysis = analyze_gem_direction_and_block(
+                    (move.x, move.y),
+                    (enemy.position.x, enemy.position.y),
+                    (gem.position.x, gem.position.y),
+                )
+                if analysis["block_possible"]:
+                    score -= 10  # Bonus for blocking (tune value as needed)
+    return score
 
 
 def tsm_evaluator(game_state: GameState, move: Coords) -> float:
@@ -48,10 +75,9 @@ def simple_search_evaluator(game_state: GameState, move: Coords) -> float:
     """Score moves by shortest path length to center (lower is better)."""
     if game_state.config is None:
         return float("inf")
-    center = Coords(game_state.config.width // 2, game_state.config.height // 2)
     path = find_path(
         start=move,
-        goal=center,
+        goal=game_state.center,
         forbidden=game_state.wall_positions,
         width=game_state.config.width,
         height=game_state.config.height,
@@ -65,7 +91,6 @@ def advanced_search_evaluator(game_state: GameState, move: Coords) -> float:
     assert game_state.config is not None
     if game_state.config is None:
         return float("inf")
-    center = Coords(game_state.config.width // 2, game_state.config.height // 2)
     bot_pos = game_state.bot
     visible_enemies = game_state.visible_bots
     closest_enemy = min(
@@ -73,7 +98,7 @@ def advanced_search_evaluator(game_state: GameState, move: Coords) -> float:
         key=lambda e: abs(e.position.x - bot_pos.x) + abs(e.position.y - bot_pos.y),
         default=None,
     )
-    center = Coords(game_state.config.width // 2, game_state.config.height // 2)
+    center = game_state.center
     if bot_pos == center and move == center:
         return CENTER_STAY_WEIGHT  # Large negative score to prefer WAIT/stay
     # Penalize moving away from center if already there

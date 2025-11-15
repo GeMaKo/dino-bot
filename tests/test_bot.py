@@ -41,8 +41,8 @@ def make_game_state(bot_pos=(0, 0), gems=None, walls=None, enemies=None):
         visible_bots=[EnemyBot(position=Coords(*e)) for e in enemies],
         config=make_config(),
     )
-    game_state.update_gem_distances()
-    game_state.update_distance_matrix()
+    game_state.recalculate_distance_matrix()
+    game_state.recalculate_gem_distances()
     return game_state
 
 

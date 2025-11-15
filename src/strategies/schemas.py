@@ -7,6 +7,16 @@ from src.pathfinding import find_path
 from src.schemas import Coords
 
 
+def simple_tie_breaker(
+    scored_candidates: List[Tuple[Coords, float]],
+) -> Optional[Coords]:
+    """Pick move with minimal score (closest to center)."""
+    if not scored_candidates:
+        return None
+    best = min(scored_candidates, key=lambda x: x[1])[0]
+    return best
+
+
 class Strategy(ABC):
     name: str
 
@@ -73,13 +83,3 @@ class GlobalGreedyStrategy(Strategy):
             )
         game_state.current_strategy = strategy.name
         return strategy.decide(game_state)
-
-
-def simple_tie_breaker(
-    scored_candidates: List[Tuple[Coords, float]],
-) -> Optional[Coords]:
-    """Pick move with minimal score (closest to center)."""
-    if not scored_candidates:
-        return None
-    best = min(scored_candidates, key=lambda x: x[1])[0]
-    return best
