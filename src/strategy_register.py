@@ -12,6 +12,7 @@ from src.strategies.planners import (
 )
 from src.strategies.schemas import (
     GlobalGreedyStrategy,
+    GlobalReachableStrategy,
     LocalStrategy,
     Strategy,
     simple_tie_breaker,
@@ -72,17 +73,26 @@ STRATEGY_REGISTRY: dict[str, Strategy] = {
     "greedy": GlobalGreedyStrategy(
         create_local_greedy_strategy(),
         create_simple_search_strategy(),
+        name="GreedyStrategy",
     ),
     "advanced_greedy": GlobalGreedyStrategy(
         create_local_greedy_strategy(),
         create_advanced_search_strategy(),
+        name="AdvancedGreedyStrategy",
     ),
     "advanced_greedy_blocking": GlobalGreedyStrategy(
         create_greedy_blocking_strategy(),
         create_advanced_search_strategy(),
+        name="AdvancedGreedyBlockingStrategy",
+    ),
+    "advanced_reachable_blocking": GlobalReachableStrategy(
+        create_greedy_blocking_strategy(),
+        create_advanced_search_strategy(),
+        name="AdvancedReachableBlockingStrategy",
     ),
     "tsm_collection": GlobalGreedyStrategy(
         create_tsm_collection_strategy(),
         create_advanced_search_strategy(),
+        name="TSMCollectionStrategy",
     ),
 }

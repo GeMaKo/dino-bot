@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 
 from src.gamestate import GameState
+from src.pathfinding import manhattan
 from src.schemas import Coords
 
 
@@ -56,14 +57,47 @@ class LocalStrategy(Strategy):
 
 
 class GlobalGreedyStrategy(Strategy):
-    def __init__(self, greedy_strategy, search_strategy):
+    def __init__(
+        self, greedy_strategy, search_strategy, name: str = "GlobalGreedyStrategy"
+    ):
         self.greedy_strategy = greedy_strategy
         self.search_strategy = search_strategy
-        self.name = "GlobalGreedyStrategy"
+        self.name = name
 
     def get_strategy(self, game_state: GameState) -> Strategy:
         reachable_gems = [gem for gem in game_state.visible_gems if gem.reachable]
         if not reachable_gems:
+            return self.search_strategy
+        else:
+            return self.greedy_strategy
+
+    def decide(self, game_state: GameState) -> Coords:
+        strategy = self.get_strategy(game_state)
+        if strategy.name != game_state.current_strategy:
+            print(
+                f"[{self.name}] Switching strategy to: {strategy.name}", file=sys.stderr
+            )
+        game_state.current_strategy = strategy.name
+        return strategy.decide(game_state)
+
+
+class GlobalReachableStrategy(Strategy):
+    def __init__(
+        self, greedy_strategy, search_strategy, name: str = "GlobalReachableStrategy"
+    ):
+        self.greedy_strategy = greedy_strategy
+        self.search_strategy = search_strategy
+        self.name = name
+
+    def get_strategy(self, game_state: GameState) -> Strategy:
+        candidates = []
+        for gem in game_state.visible_gems:
+            if gem.distance2bot is not None and gem.reachable:
+                for enemy in game_state.visible_bots:
+                    if manhattan(gem.position, enemy.position) > gem.distance2bot:
+                        candidates.append(gem.position)
+
+        if not candidates:
             return self.search_strategy
         else:
             return self.greedy_strategy

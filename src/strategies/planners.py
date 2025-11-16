@@ -17,21 +17,6 @@ def greedy_planner(game_state: GameState) -> list[Coords]:
     return candidates
 
 
-def reachable_planner(game_state: GameState) -> list[Coords]:
-    """Plan moves towards reachable visible gems only."""
-    if game_state.config is None:
-        print("GameConfig must be set to plan moves", file=sys.stderr)
-        return [game_state.bot]
-    candidates = [
-        gem.position
-        for gem in game_state.visible_gems
-        if gem.distance2bot is not None and gem.reachable
-    ]
-    if not candidates:
-        candidates = [game_state.bot]
-    return candidates
-
-
 def advanced_search_planner(game_state: GameState) -> list[Coords]:
     """Plan moves for advanced search mode (center bias, enemy avoidance)."""
     if game_state.config is None:
@@ -65,6 +50,7 @@ def simple_search_planner(game_state: GameState) -> list[Coords]:
         if 0 <= pos.x < game_state.config.width
         and 0 <= pos.y < game_state.config.height
         and pos not in [w.position for w in game_state.wall]
+        and pos not in game_state.recent_positions
     ]
     if not candidates:
         candidates = [game_state.bot]

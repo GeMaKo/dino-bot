@@ -146,7 +146,7 @@ def simple_search_evaluator(
         height=game_state.config.height,
     )
     score = len(path) if path else float("inf")
-    return path, score
+    return path if path is not None else [], score
 
 
 def advanced_search_evaluator(
@@ -169,30 +169,40 @@ def advanced_search_evaluator(
         return [], CENTER_STAY_WEIGHT  # Large negative score to prefer WAIT/stay
     # Penalize moving away from center if already there
     if bot_pos == center and move != center:
-        return (
-            [],
-            CENTER_MOVE_WEIGHT,
-        )  # Large positive score to discourage leaving center
-
-    center_dist = abs(move.x - center.x) + abs(move.y - center.y)
+        if closest_enemy:
+            enemy_center_dist = manhattan(closest_enemy.position, center)
+            # If enemy is farther from center than DISTANCE_TO_ENEMY, follow at DISTANCE_TO_ENEMY
+            if enemy_center_dist > DISTANCE_TO_ENEMY:
+                # Score moves that bring bot to DISTANCE_TO_ENEMY from enemy
+                enemy_dist = manhattan(move, closest_enemy.position)
+                score = abs(enemy_dist - DISTANCE_TO_ENEMY) + 2
+                path = find_path(
+                    start=game_state.bot,
+                    goal=move,
+                    forbidden=game_state.wall_positions,
+                    width=game_state.config.width,
+                    height=game_state.config.height,
+                )
+                # Prefer moves that are not the center and bring bot closer to enemy
+                if move != center:
+                    return path if path is not None else [], score
+        # Default: discourage leaving center if not following enemy
+        return [], CENTER_MOVE_WEIGHT
+    center_dist = manhattan(move, center)
     score = center_dist
     if closest_enemy:
-        enemy_center_dist = abs(closest_enemy.position.x - center.x) + abs(
-            closest_enemy.position.y - center.y
-        )
-        bot_center_dist = abs(bot_pos.x - center.x) + abs(bot_pos.y - center.y)
-        enemy_dist = abs(move.x - closest_enemy.position.x) + abs(
-            move.y - closest_enemy.position.y
-        )
+        enemy_center_dist = manhattan(closest_enemy.position, center)
+        bot_center_dist = manhattan(bot_pos, center)
+        enemy_dist = manhattan(move, closest_enemy.position)
         # If bot is at least DISTANCE_TO_ENEMY steps closer to center than enemy, move towards enemy
-        if bot_center_dist <= enemy_center_dist - DISTANCE_TO_ENEMY:
+        if bot_center_dist <= enemy_center_dist - 1:
             score += enemy_dist
         # Otherwise, move towards center
         elif bot_center_dist >= enemy_center_dist:
-            score += center_dist
+            score += center_dist - 2
         # Stay close to enemy (distance DISTANCE_TO_ENEMY), but keep center advantage
         elif center_dist < enemy_center_dist:
-            score += abs(enemy_dist - DISTANCE_TO_ENEMY) * 10 + center_dist
+            score += abs(enemy_dist - DISTANCE_TO_ENEMY) + center_dist
         else:
             score += center_dist
     path = find_path(
