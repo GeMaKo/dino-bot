@@ -58,29 +58,6 @@ def get_distances(
     return gems
 
 
-def get_path_to_closest_reachable_gem(
-    bot_pos: Coords,
-    gems: list[Gem],
-    walls: set[Wall],
-    width: int,
-    height: int,
-) -> list[Coords] | None:
-    """
-    Find the shortest path to the closest gem by Manhattan distance.
-
-    Filters the visible gems to the three closest (using Manhattan distance), then computes the shortest path to each using BFS. Returns the shortest valid path found, or None if no path exists.
-
-    """
-    gems_sorted = sorted(gems, key=lambda gem: manhattan(bot_pos, gem.position))
-    gem_to_check = gems_sorted[0]
-    shortest_path = None
-    forbidden = set(walls_pos.position for walls_pos in walls)
-    path = find_path(bot_pos, gem_to_check.position, forbidden, width, height)
-    if path and (shortest_path is None or len(path) < len(shortest_path)):
-        shortest_path = path
-    return shortest_path
-
-
 def get_best_gem_collection_path(
     bot_pos: Coords,
     gems: list[Gem],

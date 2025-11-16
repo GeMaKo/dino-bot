@@ -5,14 +5,13 @@ from src.config import CENTER_MOVE_WEIGHT, CENTER_STAY_WEIGHT, DISTANCE_TO_ENEMY
 from src.gamestate import GameState
 from src.pathfinding import find_path
 from src.schemas import Coords
-from src.strategies.tactics import analyze_gem_direction_and_block
 
 
-def greedy_evaluator(game_state: GameState, move: Coords) -> float:
+def greedy_evaluator(game_state: GameState, move: Coords) -> tuple[list[Coords], float]:
     """Evaluate moves using path length from bot to move."""
     if game_state.config is None:
         print("GameConfig must be set to evaluate moves", file=sys.stderr)
-        return float("inf")
+        return [], float("inf")
     path = find_path(
         start=game_state.bot,
         goal=move,
@@ -20,43 +19,81 @@ def greedy_evaluator(game_state: GameState, move: Coords) -> float:
         width=game_state.config.width,
         height=game_state.config.height,
     )
-    return len(path) if path else float("inf")
+    return path, len(path) if path else float("inf")
 
 
-def greedy_blocking_evaluator(game_state: GameState, move: Coords) -> float:
+def _get_path(start, forbidden, target, game_state):
+    assert game_state.config is not None, "GameConfig must be set to evaluate moves"
+    return find_path(
+        start=start,
+        goal=target,
+        forbidden=forbidden,
+        width=game_state.config.width,
+        height=game_state.config.height,
+    )
+
+
+def greedy_blocking_evaluator(
+    game_state: GameState, target: Coords
+) -> tuple[list[Coords], float]:
     if game_state.config is None:
         print("GameConfig must be set to evaluate moves", file=sys.stderr)
-        return float("inf")
-    path = find_path(
-        start=game_state.bot,
-        goal=move,
-        forbidden=game_state.wall_positions,
-        width=game_state.config.width,
-        height=game_state.config.height,
-    )
-    score = len(path) if path else float("inf")
-    # Blocking logic
-    if game_state.initiative:
-        for enemy in game_state.visible_bots:
-            for gem in game_state.visible_gems:
-                analysis = analyze_gem_direction_and_block(
-                    (move.x, move.y),
-                    (enemy.position.x, enemy.position.y),
-                    (gem.position.x, gem.position.y),
+        return [], float("inf")
+    for enemy in game_state.visible_bots:
+        is_close = (
+            enemy.position in game_state.bot_diagonal_positions
+            or enemy.position in game_state.bot_adjacent_positions
+        )
+        if is_close:
+            # Both bot and enemy try to reach the target
+
+            if game_state.initiative:
+                enemy_path = _get_path(
+                    enemy.position, game_state.wall_positions, target, game_state
                 )
-                if analysis["block_possible"]:
-                    score -= 10  # Bonus for blocking (tune value as needed)
-    return score
+                bot_path = _get_path(
+                    game_state.bot, game_state.wall_positions, target, game_state
+                )
+                # If both would move to the same next cell, block the enemy
+                if bot_path and enemy_path and bot_path[1] == enemy_path[1]:
+                    print("[CloseEncounter] Blocking enemy!", file=sys.stderr)
+                    return bot_path, len(bot_path) - 2
+            else:
+                # Block enemy by treating their adjacent cells as walls
+                enemy_moves = {
+                    Coords(enemy.position.x + 1, enemy.position.y),
+                    Coords(enemy.position.x - 1, enemy.position.y),
+                    Coords(enemy.position.x, enemy.position.y + 1),
+                    Coords(enemy.position.x, enemy.position.y - 1),
+                }
+                bot_path = _get_path(
+                    game_state.bot,
+                    game_state.wall_positions.union(enemy_moves),
+                    target,
+                    game_state,
+                )
+                return bot_path, len(bot_path) - 2 if bot_path else float("inf")
+        # Default path if not close
+        bot_path = find_path(
+            start=game_state.bot,
+            goal=target,
+            forbidden=game_state.wall_positions,
+            width=game_state.config.width,
+            height=game_state.config.height,
+        )
+        score = len(bot_path) if bot_path else float("inf")
+
+    return bot_path if bot_path is not None else [], score  # type: ignore
 
 
-def tsm_evaluator(game_state: GameState, move: Coords) -> float:
+def tsm_evaluator(game_state: GameState, move: Coords) -> tuple[list[Coords], float]:
     """Evaluate moves for TSV strategy (stub implementation)."""
     if game_state.config is None:
-        return float("inf")
+        return [], float("inf")
     # Filter gems to those at the candidate position
     gems = [gem for gem in game_state.visible_gems if gem.position == move]
     if not gems:
-        return float("inf")
+        return [], float("inf")
     path = get_best_gem_collection_path(
         bot_pos=game_state.bot,
         gems=gems,
@@ -68,13 +105,16 @@ def tsm_evaluator(game_state: GameState, move: Coords) -> float:
         distance_matrix=game_state.distance_matrix,
         path_segments=game_state.path_segments,
     )
-    return len(path) if path else float("inf")
+    score = len(path) if path else float("inf")
+    return path if path is not None else [], score
 
 
-def simple_search_evaluator(game_state: GameState, move: Coords) -> float:
+def simple_search_evaluator(
+    game_state: GameState, move: Coords
+) -> tuple[list[Coords], float]:
     """Score moves by shortest path length to center (lower is better)."""
     if game_state.config is None:
-        return float("inf")
+        return [], float("inf")
     path = find_path(
         start=move,
         goal=game_state.center,
@@ -82,15 +122,18 @@ def simple_search_evaluator(game_state: GameState, move: Coords) -> float:
         width=game_state.config.width,
         height=game_state.config.height,
     )
-    return len(path) if path else float("inf")
+    score = len(path) if path else float("inf")
+    return path, score
 
 
-def advanced_search_evaluator(game_state: GameState, move: Coords) -> float:
+def advanced_search_evaluator(
+    game_state: GameState, move: Coords
+) -> tuple[list[Coords], float]:
     """Score moves by center bias and enemy avoidance."""
     assert game_state is not None
     assert game_state.config is not None
     if game_state.config is None:
-        return float("inf")
+        return [], float("inf")
     bot_pos = game_state.bot
     visible_enemies = game_state.visible_bots
     closest_enemy = min(
@@ -100,10 +143,13 @@ def advanced_search_evaluator(game_state: GameState, move: Coords) -> float:
     )
     center = game_state.center
     if bot_pos == center and move == center:
-        return CENTER_STAY_WEIGHT  # Large negative score to prefer WAIT/stay
+        return [], CENTER_STAY_WEIGHT  # Large negative score to prefer WAIT/stay
     # Penalize moving away from center if already there
     if bot_pos == center and move != center:
-        return CENTER_MOVE_WEIGHT  # Large positive score to discourage leaving center
+        return (
+            [],
+            CENTER_MOVE_WEIGHT,
+        )  # Large positive score to discourage leaving center
 
     center_dist = abs(move.x - center.x) + abs(move.y - center.y)
     score = center_dist
@@ -126,4 +172,11 @@ def advanced_search_evaluator(game_state: GameState, move: Coords) -> float:
             score += abs(enemy_dist - DISTANCE_TO_ENEMY) * 10 + center_dist
         else:
             score += center_dist
-    return score
+    path = find_path(
+        start=game_state.bot,
+        goal=move,
+        forbidden=game_state.wall_positions,
+        width=game_state.config.width,
+        height=game_state.config.height,
+    )
+    return path if path is not None else [], score

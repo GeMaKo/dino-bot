@@ -29,9 +29,6 @@ class GameState:
     recent_positions: list[Coords] = field(default_factory=list)
     bot_adjacent_positions: set[Coords] = field(default_factory=set)
     bot_diagonal_positions: set[Coords] = field(default_factory=set)
-    # center is now a property, not a field
-
-    # __post_init__ no longer sets center
 
     def update_recent_positions(self, limit: int):
         self.recent_positions.append(self.bot)
@@ -51,13 +48,9 @@ class GameState:
     def floor_positions(self) -> set[Coords]:
         return {f.position for f in self.floor}
 
-    def recalculate_gem_distances(self):
-        self.visible_gems = get_distances(
-            self.bot,
-            self.visible_bots,
-            self.visible_gems,
-        )
-        self.visible_gems = check_reachable_gems(self.visible_gems)
+    @cached_property
+    def gem_positions(self) -> set[Coords]:
+        return {g.position for g in self.visible_gems}
 
     def update_bot_adjacent_positions(self):
         self.bot_adjacent_positions = {
@@ -71,12 +64,20 @@ class GameState:
             for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]
         }
 
+    def recalculate_gem_distances(self):
+        self.visible_gems = get_distances(
+            self.bot,
+            self.visible_bots,
+            self.visible_gems,
+        )
+        self.visible_gems = check_reachable_gems(self.visible_gems)
+
     def recalculate_distance_matrix(self):
         assert self.config is not None, (
             "GameConfig must be set to update distance matrix"
         )
-        gem_positions = set(gem.position for gem in self.visible_gems if gem.reachable)
         bot_pos = self.bot
+        gem_positions = self.gem_positions
         # Only recalculate changed paths
         if self.last_gem_positions != gem_positions:
             if self.debug_mode:

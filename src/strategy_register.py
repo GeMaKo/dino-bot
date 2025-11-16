@@ -1,5 +1,6 @@
 from src.strategies.evaluators import (
     advanced_search_evaluator,
+    greedy_blocking_evaluator,
     greedy_evaluator,
     simple_search_evaluator,
     tsm_evaluator,
@@ -22,6 +23,16 @@ def create_local_greedy_strategy() -> LocalStrategy:
     return LocalStrategy(
         name="Greedy Collection Strategy",
         evaluator=greedy_evaluator,
+        planner=greedy_planner,
+        tie_breaker=simple_tie_breaker,
+    )
+
+
+def create_greedy_blocking_strategy() -> LocalStrategy:
+    """Create and return a greedy blocking strategy instance."""
+    return LocalStrategy(
+        name="Greedy Blocking Strategy",
+        evaluator=greedy_blocking_evaluator,
         planner=greedy_planner,
         tie_breaker=simple_tie_breaker,
     )
@@ -64,6 +75,10 @@ STRATEGY_REGISTRY: dict[str, Strategy] = {
     ),
     "advanced_greedy": GlobalGreedyStrategy(
         create_local_greedy_strategy(),
+        create_advanced_search_strategy(),
+    ),
+    "advanced_greedy_blocking": GlobalGreedyStrategy(
+        create_greedy_blocking_strategy(),
         create_advanced_search_strategy(),
     ),
     "tsm_collection": GlobalGreedyStrategy(
