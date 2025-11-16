@@ -3,7 +3,7 @@ import sys
 from src.bot_logic import get_best_gem_collection_path
 from src.config import CENTER_MOVE_WEIGHT, CENTER_STAY_WEIGHT, DISTANCE_TO_ENEMY
 from src.gamestate import GameState
-from src.pathfinding import find_path
+from src.pathfinding import find_path, manhattan
 from src.schemas import Coords
 
 
@@ -46,18 +46,41 @@ def greedy_blocking_evaluator(
         )
         if is_close:
             # Both bot and enemy try to reach the target
-
             if game_state.initiative:
+                # Both bot and enemy try to reach the target
                 enemy_path = _get_path(
                     enemy.position, game_state.wall_positions, target, game_state
                 )
                 bot_path = _get_path(
                     game_state.bot, game_state.wall_positions, target, game_state
                 )
-                # If both would move to the same next cell, block the enemy
-                if bot_path and enemy_path and bot_path[1] == enemy_path[1]:
-                    print("[CloseEncounter] Blocking enemy!", file=sys.stderr)
-                    return bot_path, len(bot_path) - 2
+
+                # Ensure both paths exist and enemy has at least one move
+                if not bot_path or not enemy_path or len(enemy_path) <= 1:
+                    return bot_path if bot_path else [], float("inf")
+
+                block_move = enemy_path[1]  # Enemy's next move towards target
+                if block_move not in game_state.bot_adjacent_positions:
+                    return bot_path, len(bot_path) if bot_path else float("inf")
+
+                # Simulate bot moving to block enemy's next move
+                block_path = _get_path(
+                    block_move, game_state.wall_positions, target, game_state
+                )
+
+                # Only block if it brings bot closer to target
+                bot_distance = manhattan(game_state.bot, target)
+                block_distance = manhattan(block_move, target)
+
+                if block_path and block_distance < bot_distance:
+                    # Score is path length minus 2 (to prioritize shorter paths and blocking)
+                    score = len(block_path) - 2
+                    block_path.insert(0, block_move)  # Include blocking move
+                    print(
+                        "[CloseEncounter] Blocking enemy and advancing!",
+                        file=sys.stderr,
+                    )
+                    return block_path, score
             else:
                 # Block enemy by treating their adjacent cells as walls
                 enemy_moves = {
