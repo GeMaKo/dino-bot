@@ -39,6 +39,17 @@ def greedy_blocking_evaluator(
     if game_state.config is None:
         print("GameConfig must be set to evaluate moves", file=sys.stderr)
         return [], float("inf")
+
+    # Default path if not close
+    bot_path = find_path(
+        start=game_state.bot,
+        goal=target,
+        forbidden=game_state.wall_positions,
+        width=game_state.config.width,
+        height=game_state.config.height,
+    )
+    score = len(bot_path) if bot_path else float("inf")
+
     for enemy in game_state.visible_bots:
         is_close = (
             enemy.position in game_state.bot_diagonal_positions
@@ -96,15 +107,6 @@ def greedy_blocking_evaluator(
                     game_state,
                 )
                 return bot_path, len(bot_path) - 2 if bot_path else float("inf")
-        # Default path if not close
-        bot_path = find_path(
-            start=game_state.bot,
-            goal=target,
-            forbidden=game_state.wall_positions,
-            width=game_state.config.width,
-            height=game_state.config.height,
-        )
-        score = len(bot_path) if bot_path else float("inf")
 
     return bot_path if bot_path is not None else [], score  # type: ignore
 
@@ -146,6 +148,36 @@ def simple_search_evaluator(
         height=game_state.config.height,
     )
     score = len(path) if path else float("inf")
+    return path if path is not None else [], score
+
+
+def cave_explore_evaluator(
+    game_state: GameState, move: Coords
+) -> tuple[list[Coords], float]:
+    """Score moves by unexplored status and path length to oldest floor."""
+    if game_state.config is None:
+        return [], float("inf")
+
+    # Bonus for moving into a hole
+    if move not in game_state.wall_positions and move not in game_state.floor_positions:
+        bonus = -20
+    else:
+        # If moving to a floor, score by how long ago it was visited
+        floor = game_state.known_floors.get(move)
+        bonus = -floor.last_seen if floor else 0
+
+    path = find_path(
+        start=game_state.bot,
+        goal=move,
+        forbidden=game_state.wall_positions,
+        width=game_state.config.width,
+        height=game_state.config.height,
+    )
+    score = (len(path) if path else float("inf")) + bonus
+    print(
+        f"[CaveExploreEvaluator] Bot Pos {game_state.bot} Move: {move}, Score: {score}",
+        file=sys.stderr,
+    )
     return path if path is not None else [], score
 
 

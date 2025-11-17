@@ -31,17 +31,47 @@ def get_enemy2gems_distances(
     return gems
 
 
+def get_bot_enemy_2_gem_distances(
+    bot_pos: Coords,
+    enemies: list[EnemyBot],
+    gem: Gem,
+) -> Gem:
+    """
+    Compute distances from the bot and enemies to a single gem.
+    """
+    distance = manhattan(bot_pos, gem.position)
+    gem.distance2bot = distance
+    for enemy in enemies:
+        enemy_distance = manhattan(enemy.position, gem.position)
+        gem.distance2enemies.append(enemy_distance)
+    return gem
+
+
 def analyze_enemies(enemies: list[EnemyBot], gems: list[Gem]) -> list[Gem]:
     for enemy in enemies:
         gems = get_enemy2gems_distances(enemy.position, gems)
     return gems
 
 
-def check_reachable_gems(gems: list[Gem]) -> list[Gem]:
-    for gem in gems:
-        if gem.distance2bot is not None:
-            gem.reachable = gem.distance2bot < gem.ttl + 1
-    return gems
+def check_reachable_gem(
+    bot_pos: Coords,
+    gem: Gem,
+    walls: set[Coords],
+    width: int,
+    height: int,
+) -> bool:
+    gem_path = find_path(
+        start=bot_pos,
+        goal=gem.position,
+        forbidden=walls,
+        width=width,
+        height=height,
+    )
+    if len(gem_path) > 0 and len(gem_path) - 1 <= gem.ttl:
+        reachable = True
+    else:
+        reachable = False
+    return reachable
 
 
 def get_distances(

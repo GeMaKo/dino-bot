@@ -56,7 +56,7 @@ class CollectorBot:
         self.bot_phase = Phase.SEARCH_GEMS
         self.debug_mode = debug_mode
 
-    def process_game_state(self) -> str:
+    def process_game_state(self) -> tuple[str, list[Coords]]:
         """
         Process a single line of input and determine the next move.
 
@@ -73,7 +73,7 @@ class CollectorBot:
         assert self.game_state.config is not None
 
         # Use the strategy to decide the next position
-        next_pos = self.strategy.decide(self.game_state)
+        next_pos, next_path = self.strategy.decide(self.game_state)
 
         # Use pathfinding to determine next move
         # Update recent positions (keep last N, from config)
@@ -84,7 +84,7 @@ class CollectorBot:
         dy = next_pos.y - self.game_state.bot.y
         move_direction = Direction.from_delta(Coords(x=dx, y=dy))
         move = Direction.to_str(move_direction)
-        return move
+        return move, next_path
 
     def run(self):
         """
@@ -126,6 +126,21 @@ class CollectorBot:
             assert self.game_state is not None
             self.game_state.refresh()
 
-            move = self.process_game_state()
-            print(move, flush=True)
+            move, next_path = self.process_game_state()
+            highlight_visible_walls = [
+                [w.position.x, w.position.y, "#ff0000"] for w in self.game_state.wall
+            ]
+            highlight_next_path = [[w.x, w.y, "#00ff11"] for w in next_path]
+            highlight = {
+                "highlight": [
+                    [w.x, w.y, "#2f00ff"] for w in self.game_state.wall_positions
+                ]
+                + highlight_next_path
+                + [[7, 4, "#ffff00"]]  # Debug tile
+            }
+
+            print(
+                f"{move} {json.dumps(highlight)}",
+                flush=True,
+            )
             self.game_state.last_bot_pos = self.game_state.bot

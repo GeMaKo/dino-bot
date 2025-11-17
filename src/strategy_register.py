@@ -1,5 +1,6 @@
 from src.strategies.evaluators import (
     advanced_search_evaluator,
+    cave_explore_evaluator,
     greedy_blocking_evaluator,
     greedy_evaluator,
     simple_search_evaluator,
@@ -7,12 +8,12 @@ from src.strategies.evaluators import (
 )
 from src.strategies.planners import (
     advanced_search_planner,
+    cave_explore_planner,
     greedy_planner,
     simple_search_planner,
 )
 from src.strategies.schemas import (
     GlobalGreedyStrategy,
-    GlobalReachableStrategy,
     LocalStrategy,
     Strategy,
     simple_tie_breaker,
@@ -69,6 +70,16 @@ def create_advanced_search_strategy() -> LocalStrategy:
     )
 
 
+def create_cave_explore_strategy() -> LocalStrategy:
+    """Create and return a cave exploration strategy instance."""
+    return LocalStrategy(
+        name="Cave Explore Strategy",
+        evaluator=cave_explore_evaluator,
+        planner=cave_explore_planner,
+        tie_breaker=simple_tie_breaker,
+    )
+
+
 STRATEGY_REGISTRY: dict[str, Strategy] = {
     "greedy": GlobalGreedyStrategy(
         create_local_greedy_strategy(),
@@ -85,14 +96,14 @@ STRATEGY_REGISTRY: dict[str, Strategy] = {
         create_advanced_search_strategy(),
         name="AdvancedGreedyBlockingStrategy",
     ),
-    "advanced_reachable_blocking": GlobalReachableStrategy(
-        create_greedy_blocking_strategy(),
-        create_advanced_search_strategy(),
-        name="AdvancedReachableBlockingStrategy",
-    ),
     "tsm_collection": GlobalGreedyStrategy(
         create_tsm_collection_strategy(),
         create_advanced_search_strategy(),
         name="TSMCollectionStrategy",
+    ),
+    "cave_explore_greedy": GlobalGreedyStrategy(
+        create_greedy_blocking_strategy(),
+        create_cave_explore_strategy(),
+        name="CaveExploreGreedyStrategy",
     ),
 }

@@ -3,8 +3,8 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from src.bot_logic import (
-    check_reachable_gems,
-    get_distances,
+    check_reachable_gem,
+    get_bot_enemy_2_gem_distances,
 )
 from src.pathfinding import find_path
 from src.schemas import Coords, EnemyBot, Floor, GameConfig, Gem, Wall
@@ -19,6 +19,9 @@ class GameState:
     initiative: bool
     visible_gems: list[Gem]
     visible_bots: list[EnemyBot]
+    known_gems: dict[Coords, Gem] = field(default_factory=dict)
+    known_walls: dict[Coords, Wall] = field(default_factory=dict)
+    known_floors: dict[Coords, Floor] = field(default_factory=dict)
     distance_matrix: dict = field(default_factory=dict)
     path_segments: dict = field(default_factory=dict)
     last_gem_positions: set[Coords] = field(default_factory=set)
@@ -29,6 +32,7 @@ class GameState:
     recent_positions: list[Coords] = field(default_factory=list)
     bot_adjacent_positions: set[Coords] = field(default_factory=set)
     bot_diagonal_positions: set[Coords] = field(default_factory=set)
+    recently_visited_positions: set[Coords] = field(default_factory=set)
 
     def update_recent_positions(self, limit: int):
         self.recent_positions.append(self.bot)
@@ -40,17 +44,44 @@ class GameState:
         assert self.config is not None, "GameConfig must be set to get center"
         return Coords(self.config.width // 2, self.config.height // 2)
 
-    @cached_property
+    @property
     def wall_positions(self) -> set[Coords]:
-        return {w.position for w in self.wall}
+        return set(self.known_walls.keys())
 
-    @cached_property
+    @property
     def floor_positions(self) -> set[Coords]:
-        return {f.position for f in self.floor}
+        return set(self.known_floors.keys())
 
-    @cached_property
+    @property
     def gem_positions(self) -> set[Coords]:
-        return {g.position for g in self.visible_gems}
+        return set(self.known_gems.keys())
+
+    def update_known_gems(self):
+        assert self.config is not None, "GameConfig must be set to update known gems"
+        # Decrease TTL for all known gems
+        for pos, gem in list(self.known_gems.items()):
+            self.known_gems[pos].ttl -= 1
+            if self.known_gems[pos].ttl <= 0:
+                del self.known_gems[pos]
+        # Update with currently visible gems (resetting TTL if seen again)
+        self.known_gems.update({gem.position: gem for gem in self.visible_gems})
+        for gem in self.known_gems.values():
+            gem.reachable = check_reachable_gem(
+                self.bot,
+                gem,
+                self.wall_positions,
+                self.config.width,
+                self.config.height,
+            )
+        self.known_gems.pop(self.bot, None)
+
+    def update_known_walls(self):
+        for wall in self.wall:
+            self.known_walls[wall.position] = wall
+
+    def update_known_floors(self):
+        for floor in self.floor:
+            self.known_floors[floor.position] = floor
 
     def update_bot_adjacent_positions(self):
         self.bot_adjacent_positions = {
@@ -65,12 +96,10 @@ class GameState:
         }
 
     def recalculate_gem_distances(self):
-        self.visible_gems = get_distances(
-            self.bot,
-            self.visible_bots,
-            self.visible_gems,
-        )
-        self.visible_gems = check_reachable_gems(self.visible_gems)
+        for pos, gem in list(self.known_gems.items()):
+            self.known_gems[pos] = get_bot_enemy_2_gem_distances(
+                self.bot, self.visible_bots, gem
+            )
 
     def recalculate_distance_matrix(self):
         assert self.config is not None, (
@@ -148,7 +177,10 @@ class GameState:
             raise ValueError("'bot' must be a list or tuple of length 2")
         bot = Coords(x=data["bot"][0], y=data["bot"][1])
         wall = {Wall(position=Coords(x=w[0], y=w[1])) for w in data["wall"]}
-        floor = {Floor(position=Coords(x=f[0], y=f[1])) for f in data["floor"]}
+        floor = {
+            Floor(position=Coords(x=f[0], y=f[1]), last_seen=data["tick"])
+            for f in data["floor"]
+        }
         visible_gems = []
         for g in data["visible_gems"]:
             if "position" not in g or "ttl" not in g:
@@ -192,7 +224,10 @@ class GameState:
         self.tick = data["tick"]
         self.bot = Coords(x=data["bot"][0], y=data["bot"][1])
         self.wall = {Wall(position=Coords(x=w[0], y=w[1])) for w in data["wall"]}
-        self.floor = {Floor(position=Coords(x=f[0], y=f[1])) for f in data["floor"]}
+        self.floor = {
+            Floor(position=Coords(x=f[0], y=f[1]), last_seen=self.tick)
+            for f in data["floor"]
+        }
         self.initiative = data["initiative"]
         self.visible_gems = []
         for g in data["visible_gems"]:
@@ -218,6 +253,9 @@ class GameState:
         ]
 
     def refresh(self):
+        self.update_known_floors()
+        self.update_known_walls()
+        self.update_known_gems()
         self.recalculate_gem_distances()
         self.recalculate_distance_matrix()
         self.update_bot_adjacent_positions()

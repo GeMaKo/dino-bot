@@ -84,3 +84,4 @@ class Wall:
 @dataclass(frozen=True)
 class Floor:
     position: Coords
+    last_seen: int

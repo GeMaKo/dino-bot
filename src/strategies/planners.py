@@ -1,6 +1,7 @@
 import sys
 
 from src.gamestate import GameState
+from src.pathfinding import manhattan
 from src.schemas import Coords
 
 
@@ -10,11 +11,69 @@ def greedy_planner(game_state: GameState) -> list[Coords]:
         print("GameConfig must be set to plan moves", file=sys.stderr)
         return [game_state.bot]
     candidates = [
-        gem.position for gem in game_state.visible_gems if gem.distance2bot is not None
+        gem.position
+        for gem in game_state.known_gems.values()
+        if gem.distance2bot is not None
     ]
     if not candidates:
         candidates = [game_state.bot]
     return candidates
+
+
+def find_hidden_positions(game_state: GameState) -> list[Coords]:
+    """Return hidden positions adjacent to known floor tiles."""
+    assert game_state.config is not None, (
+        "GameConfig must be set to find hidden positions"
+    )
+    hidden = []
+    visible_positions = [tile.position for tile in (game_state.floor | game_state.wall)]
+    known_floor_positions = set(game_state.known_floors.keys())
+
+    def adjacent(pos: Coords) -> list[Coords]:
+        # Returns adjacent positions (up, down, left, right)
+        return [
+            Coords(pos.x + dx, pos.y + dy)
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
+            if 0 <= pos.x + dx < game_state.config.width
+            and 0 <= pos.y + dy < game_state.config.height
+        ]
+
+    for x in range(game_state.config.width):
+        for y in range(game_state.config.height):
+            pos = Coords(x, y)
+            if (
+                pos not in visible_positions
+                and pos not in game_state.wall_positions
+                and pos not in game_state.known_floors
+            ):
+                # Only add if adjacent to a known floor
+                if any(adj in known_floor_positions for adj in adjacent(pos)):
+                    hidden.append(pos)
+    return hidden
+
+
+def cave_explore_planner(game_state: GameState) -> list[Coords]:
+    """Plan moves to hidden positions blocked by walls, or oldest visited floor."""
+    if game_state.config is None:
+        print("GameConfig must be set to plan moves", file=sys.stderr)
+        return [game_state.bot]
+
+    # 1. Find hidden positions blocked by walls
+    hidden = find_hidden_positions(game_state)
+    if hidden:
+        # Move towards the nearest hidden position
+        nearest = min(hidden, key=lambda pos: manhattan(game_state.bot, pos))
+        return [nearest]
+    # 2. If no hidden, move towards oldest visited floor
+    if game_state.known_floors:
+        oldest_floor = min(
+            game_state.known_floors.values(),
+            key=lambda f: f.last_seen,
+        )
+        return [oldest_floor.position]
+
+    # Fallback: stay in place
+    return [game_state.bot]
 
 
 def advanced_search_planner(game_state: GameState) -> list[Coords]:
