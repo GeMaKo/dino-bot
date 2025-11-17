@@ -61,7 +61,6 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
 
     if hidden:
         nearest = min(hidden, key=lambda pos: manhattan(game_state.bot, pos))
-        print(nearest, file=sys.stderr)
         return [nearest]
     if game_state.known_floors:
         oldest_floor = min(
