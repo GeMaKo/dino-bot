@@ -32,7 +32,7 @@ class GameState:
     recent_positions: list[Coords] = field(default_factory=list)
     bot_adjacent_positions: set[Coords] = field(default_factory=set)
     bot_diagonal_positions: set[Coords] = field(default_factory=set)
-    recently_visited_positions: set[Coords] = field(default_factory=set)
+    cave_revealed: bool = field(default=False)
 
     def update_recent_positions(self, limit: int):
         self.recent_positions.append(self.bot)

@@ -174,10 +174,6 @@ def cave_explore_evaluator(
         height=game_state.config.height,
     )
     score = (len(path) if path else float("inf")) + bonus
-    print(
-        f"[CaveExploreEvaluator] Bot Pos {game_state.bot} Move: {move}, Score: {score}",
-        file=sys.stderr,
-    )
     return path if path is not None else [], score
 
 

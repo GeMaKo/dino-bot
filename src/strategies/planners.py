@@ -29,13 +29,12 @@ def find_hidden_positions(game_state: GameState) -> list[Coords]:
     visible_positions = [tile.position for tile in (game_state.floor | game_state.wall)]
     known_floor_positions = set(game_state.known_floors.keys())
 
-    def adjacent(pos: Coords) -> list[Coords]:
+    def _adjacent(pos: Coords, width: int, height: int) -> list[Coords]:
         # Returns adjacent positions (up, down, left, right)
         return [
             Coords(pos.x + dx, pos.y + dy)
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-            if 0 <= pos.x + dx < game_state.config.width
-            and 0 <= pos.y + dy < game_state.config.height
+            if 0 <= pos.x + dx < width and 0 <= pos.y + dy < height
         ]
 
     for x in range(game_state.config.width):
@@ -47,7 +46,12 @@ def find_hidden_positions(game_state: GameState) -> list[Coords]:
                 and pos not in game_state.known_floors
             ):
                 # Only add if adjacent to a known floor
-                if any(adj in known_floor_positions for adj in adjacent(pos)):
+                if any(
+                    adj in known_floor_positions
+                    for adj in _adjacent(
+                        pos, game_state.config.width, game_state.config.height
+                    )
+                ):
                     hidden.append(pos)
     return hidden
 
@@ -57,14 +61,18 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
     if game_state.config is None:
         print("GameConfig must be set to plan moves", file=sys.stderr)
         return [game_state.bot]
+    if game_state.cave_revealed:
+        hidden = []
+    else:
+        hidden = find_hidden_positions(game_state)
+        if not hidden:
+            game_state.cave_revealed = True
+            print("Cave fully revealed!", file=sys.stderr)
+            print("Switching to oldest floor exploration.", file=sys.stderr)
 
-    # 1. Find hidden positions blocked by walls
-    hidden = find_hidden_positions(game_state)
     if hidden:
-        # Move towards the nearest hidden position
         nearest = min(hidden, key=lambda pos: manhattan(game_state.bot, pos))
         return [nearest]
-    # 2. If no hidden, move towards oldest visited floor
     if game_state.known_floors:
         oldest_floor = min(
             game_state.known_floors.values(),
