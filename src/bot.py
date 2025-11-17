@@ -136,7 +136,6 @@ class CollectorBot:
                     [w.x, w.y, "#2f00ff"] for w in self.game_state.wall_positions
                 ]
                 + highlight_next_path
-                + [[7, 4, "#ffff00"]]  # Debug tile
             }
 
             print(
