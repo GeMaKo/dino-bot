@@ -32,12 +32,27 @@ class GameState:
     recent_positions: list[Coords] = field(default_factory=list)
     bot_adjacent_positions: set[Coords] = field(default_factory=set)
     bot_diagonal_positions: set[Coords] = field(default_factory=set)
+    hidden_positions: set[Coords] = field(default_factory=set)
     cave_revealed: bool = field(default=False)
 
-    def update_recent_positions(self, limit: int):
-        self.recent_positions.append(self.bot)
-        if len(self.recent_positions) > limit:
-            self.recent_positions.pop(0)
+    def __post_init__(self):
+        if self.config is not None:
+            self.hidden_positions = self._init_hidden_positions()
+
+    def _init_hidden_positions(self):
+        assert self.config is not None, (
+            "GameConfig must be set to initialize hidden positions"
+        )
+        self.update_known_walls()
+        self.update_known_floors()
+        # Initialize all positions as hidden except known floors/walls
+        hidden = []
+        for x in range(self.config.width):
+            for y in range(self.config.height):
+                pos = Coords(x, y)
+                if pos not in self.wall_positions and pos not in self.floor_positions:
+                    hidden.append(pos)
+        return set(hidden)
 
     @cached_property
     def center(self) -> Coords:
@@ -83,6 +98,9 @@ class GameState:
         for floor in self.floor:
             self.known_floors[floor.position] = floor
 
+    def update_hidden_positions(self):
+        self.hidden_positions -= self.floor_positions | self.wall_positions
+
     def update_bot_adjacent_positions(self):
         self.bot_adjacent_positions = {
             Coords(self.bot.x + dx, self.bot.y + dy)
@@ -94,6 +112,11 @@ class GameState:
             Coords(self.bot.x + dx, self.bot.y + dy)
             for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]
         }
+
+    def update_recent_positions(self, limit: int):
+        self.recent_positions.append(self.bot)
+        if len(self.recent_positions) > limit:
+            self.recent_positions.pop(0)
 
     def recalculate_gem_distances(self):
         for pos, gem in list(self.known_gems.items()):
@@ -203,6 +226,7 @@ class GameState:
             and isinstance(b["position"], (list, tuple))
             and len(b["position"]) == 2
         ]
+
         return cls(
             tick=data["tick"],
             bot=bot,
@@ -256,6 +280,7 @@ class GameState:
         self.update_known_floors()
         self.update_known_walls()
         self.update_known_gems()
+        self.update_hidden_positions()
         self.recalculate_gem_distances()
         self.recalculate_distance_matrix()
         self.update_bot_adjacent_positions()

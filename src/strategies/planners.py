@@ -25,34 +25,23 @@ def find_hidden_positions(game_state: GameState) -> list[Coords]:
     assert game_state.config is not None, (
         "GameConfig must be set to find hidden positions"
     )
-    hidden = []
-    visible_positions = [tile.position for tile in (game_state.floor | game_state.wall)]
     known_floor_positions = set(game_state.known_floors.keys())
 
     def _adjacent(pos: Coords, width: int, height: int) -> list[Coords]:
-        # Returns adjacent positions (up, down, left, right)
         return [
             Coords(pos.x + dx, pos.y + dy)
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
             if 0 <= pos.x + dx < width and 0 <= pos.y + dy < height
         ]
 
-    for x in range(game_state.config.width):
-        for y in range(game_state.config.height):
-            pos = Coords(x, y)
-            if (
-                pos not in visible_positions
-                and pos not in game_state.wall_positions
-                and pos not in game_state.known_floors
-            ):
-                # Only add if adjacent to a known floor
-                if any(
-                    adj in known_floor_positions
-                    for adj in _adjacent(
-                        pos, game_state.config.width, game_state.config.height
-                    )
-                ):
-                    hidden.append(pos)
+    hidden = [
+        pos
+        for pos in game_state.hidden_positions
+        if any(
+            adj in known_floor_positions
+            for adj in _adjacent(pos, game_state.config.width, game_state.config.height)
+        )
+    ]
     return hidden
 
 
@@ -72,6 +61,7 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
 
     if hidden:
         nearest = min(hidden, key=lambda pos: manhattan(game_state.bot, pos))
+        print(nearest, file=sys.stderr)
         return [nearest]
     if game_state.known_floors:
         oldest_floor = min(
