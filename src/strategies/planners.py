@@ -1,7 +1,8 @@
+import heapq
 import sys
 
 from src.gamestate import GameState
-from src.pathfinding import manhattan
+from src.pathfinding import find_path, manhattan
 from src.schemas import Coords
 
 
@@ -69,7 +70,21 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
         ):
             target = game_state.explore_target
         else:
-            target = min(hidden, key=lambda pos: manhattan(game_state.bot, pos))
+            top3targets = heapq.nsmallest(
+                3, hidden, key=lambda pos: manhattan(game_state.bot, pos)
+            )
+            target = min(
+                top3targets,
+                key=lambda pos: len(
+                    find_path(
+                        game_state.bot,
+                        pos,
+                        game_state.wall_positions,
+                        game_state.config.width,
+                        game_state.config.height,
+                    )
+                ),
+            )
             game_state.explore_target = target
         return [target]
     if game_state.known_floors:
