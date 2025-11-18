@@ -60,6 +60,7 @@ class GameConfig:
     signal_quantization: int
     signal_fade: int
     bot_seed: int
+    enable_debug: bool = False
 
 
 @dataclass
