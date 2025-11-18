@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from functools import lru_cache
 
@@ -61,6 +61,12 @@ class GameConfig:
     signal_fade: int
     bot_seed: int
     enable_debug: bool = False
+
+    @classmethod
+    def from_dict(cls, d: dict):
+        allowed = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in allowed}
+        return cls(**filtered)
 
 
 @dataclass

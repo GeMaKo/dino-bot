@@ -108,7 +108,7 @@ class CollectorBot:
         for line in sys.stdin:
             data = json.loads(line)
             if first_tick:
-                config = GameConfig(**data.get("config"))
+                config = GameConfig.from_dict(data.get("config"))
                 random.seed(config.bot_seed)
                 data.pop("config", None)
                 print(
