@@ -50,6 +50,8 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
     if game_state.config is None:
         print("GameConfig must be set to plan moves", file=sys.stderr)
         return [game_state.bot]
+    if game_state.explore_target is not None:
+        game_state.explore_target = None
     if game_state.cave_revealed:
         hidden = []
     else:
@@ -60,8 +62,16 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
             print("Switching to oldest floor exploration.", file=sys.stderr)
 
     if hidden:
-        nearest = min(hidden, key=lambda pos: manhattan(game_state.bot, pos))
-        return [nearest]
+        # If previous target is still valid, keep it
+        if (
+            game_state.explore_target in hidden
+            and game_state.explore_target not in game_state.recent_positions
+        ):
+            target = game_state.explore_target
+        else:
+            target = min(hidden, key=lambda pos: manhattan(game_state.bot, pos))
+            game_state.explore_target = target
+        return [target]
     if game_state.known_floors:
         oldest_floor = min(
             game_state.known_floors.values(),

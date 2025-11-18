@@ -34,6 +34,7 @@ class GameState:
     bot_diagonal_positions: set[Coords] = field(default_factory=set)
     hidden_positions: set[Coords] = field(default_factory=set)
     cave_revealed: bool = field(default=False)
+    explore_target: Coords | None = field(default=None)
 
     def __post_init__(self):
         if self.config is not None:
