@@ -60,7 +60,8 @@ def order_patrol_points(
 
 
 def patrol_set_cover(game_state: GameState) -> list[Coords]:
-    if not game_state.patrol_points:
+    if not game_state.patrol_points or game_state.tick % 100 == 0:
+        print("Recomputing patrol points using set cover.", file=sys.stderr)
         game_state.patrol_points = solve_set_cover(
             game_state.view_points, set(game_state.known_floors.keys())
         )
@@ -132,7 +133,7 @@ def find_hidden_positions(game_state: GameState) -> list[Coords]:
 
 
 def cave_explore_planner(
-    game_state: GameState, patrol_mode: str = "oldest"
+    game_state: GameState, patrol_mode: str = "set_cover"
 ) -> list[Coords]:
     """Plan moves to hidden positions blocked by walls, or oldest visited floor."""
     if game_state.config is None:
