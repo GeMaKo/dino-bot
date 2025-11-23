@@ -16,6 +16,13 @@ class Phase(Enum):
     COLLECT_GEMS = 1
 
 
+class BehaviourState(Enum):
+    IDLE = 0
+    EXPLORING = 1
+    PATROLLING = 2
+    COLLECTING_GEM = 3
+
+
 @dataclass(frozen=True)
 class Coords:
     x: int

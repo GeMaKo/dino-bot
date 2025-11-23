@@ -1,4 +1,5 @@
 import sys
+from collections import deque
 from dataclasses import dataclass, field
 from functools import cached_property
 
@@ -6,8 +7,9 @@ from src.bot_logic import (
     check_reachable_gem,
     get_bot_enemy_2_gem_distances,
 )
+from src.debug import highlight_coords
 from src.pathfinding import find_path
-from src.schemas import Coords, EnemyBot, Floor, GameConfig, Gem, Wall
+from src.schemas import BehaviourState, Coords, EnemyBot, Floor, GameConfig, Gem, Wall
 
 
 @dataclass
@@ -35,10 +37,20 @@ class GameState:
     hidden_positions: set[Coords] = field(default_factory=set)
     cave_revealed: bool = field(default=False)
     explore_target: Coords | None = field(default=None)
+    view_points: dict[Coords, set[Coords]] = field(default_factory=dict)
+    highlight_sink: list[Coords] | None = None
+    patrol_route: list[Coords] = field(default_factory=list)
+    patrol_points: set[Coords] = field(default_factory=set)
+    patrol_index: int = field(default=0)
+    behaviour_state: BehaviourState = field(default=BehaviourState.IDLE)
+    patrol_points_visited: deque[Coords] = field(
+        default_factory=lambda: deque(maxlen=2)
+    )
 
     def __post_init__(self):
         if self.config is not None:
             self.hidden_positions = self._init_hidden_positions()
+        self.highlight_sink = highlight_coords
 
     def _init_hidden_positions(self):
         assert self.config is not None, (
@@ -51,7 +63,10 @@ class GameState:
         for x in range(self.config.width):
             for y in range(self.config.height):
                 pos = Coords(x, y)
-                if pos not in self.wall_positions and pos not in self.floor_positions:
+                if (
+                    pos not in self.wall_positions
+                    and pos not in self.known_floor_positions
+                ):
                     hidden.append(pos)
         return set(hidden)
 
@@ -65,8 +80,12 @@ class GameState:
         return set(self.known_walls.keys())
 
     @property
-    def floor_positions(self) -> set[Coords]:
+    def known_floor_positions(self) -> set[Coords]:
         return set(self.known_floors.keys())
+
+    @property
+    def visible_floor_positions(self) -> set[Coords]:
+        return set(floor.position for floor in self.floor)
 
     @property
     def gem_positions(self) -> set[Coords]:
@@ -91,6 +110,10 @@ class GameState:
             )
         self.known_gems.pop(self.bot, None)
 
+    def update_view_points(self):
+        self.view_points[self.bot] = self.visible_floor_positions
+        # print(f"Number of view points: {len(self.view_points)}", file=sys.stderr)
+
     def update_known_walls(self):
         for wall in self.wall:
             self.known_walls[wall.position] = wall
@@ -100,7 +123,7 @@ class GameState:
             self.known_floors[floor.position] = floor
 
     def update_hidden_positions(self):
-        self.hidden_positions -= self.floor_positions | self.wall_positions
+        self.hidden_positions -= self.known_floor_positions | self.wall_positions
 
     def update_bot_adjacent_positions(self):
         self.bot_adjacent_positions = {
@@ -282,6 +305,7 @@ class GameState:
         self.update_known_walls()
         self.update_known_gems()
         self.update_hidden_positions()
+        self.update_view_points()
         self.recalculate_gem_distances()
         self.recalculate_distance_matrix()
         self.update_bot_adjacent_positions()

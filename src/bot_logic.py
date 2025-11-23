@@ -88,6 +88,37 @@ def get_distances(
     return gems
 
 
+def solve_set_cover(
+    view_points: dict[Coords, set[Coords]], universe: set[Coords]
+) -> set[Coords]:
+    """Solve the set cover problem using a greedy algorithm."""
+    covery_sets = view_points.copy()
+    covered = set()
+    selected_sets = set()
+
+    while covered != universe:
+        best_set = None
+        best_coverage = 0
+
+        for s, elements in covery_sets.items():
+            coverage = len(elements - covered)
+            if coverage > best_coverage:
+                best_coverage = coverage
+                best_set = s
+
+        if best_set is None:
+            break  # No more sets can cover new elements
+
+        selected_sets.add(best_set)
+        covered.update(covery_sets[best_set])
+        del covery_sets[best_set]
+
+    if covered == universe:
+        return selected_sets
+    else:
+        return set()
+
+
 def get_best_gem_collection_path(
     bot_pos: Coords,
     gems: list[Gem],

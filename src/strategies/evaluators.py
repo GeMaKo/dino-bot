@@ -159,7 +159,10 @@ def cave_explore_evaluator(
         return [], float("inf")
 
     # Bonus for moving into a hole
-    if move not in game_state.wall_positions and move not in game_state.floor_positions:
+    if (
+        move not in game_state.wall_positions
+        and move not in game_state.known_floor_positions
+    ):
         bonus = -20
     else:
         # If moving to a floor, score by how long ago it was visited

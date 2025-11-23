@@ -6,6 +6,7 @@ from typing import Optional
 from src.config import (
     RECENT_POSITIONS_LIMIT,
 )
+from src.debug import highlight_coords
 from src.gamestate import GameState
 from src.schemas import (
     Coords,
@@ -137,8 +138,9 @@ class CollectorBot:
                 ]
                 + highlight_next_path
                 # + [[14, 16, "#ffff00"]]  # Highlight debug position
+                + [[c.x, c.y, "#ffff00"] for c in highlight_coords]
             }
-
+            highlight_coords.clear()
             print(
                 f"{move} {json.dumps(highlight)}",
                 flush=True,

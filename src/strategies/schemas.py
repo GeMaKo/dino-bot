@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 
 from src.gamestate import GameState
-from src.schemas import Coords
+from src.schemas import BehaviourState, Coords
 
 
 def simple_tie_breaker(
@@ -78,6 +78,9 @@ class GlobalGreedyStrategy(Strategy):
         if not reachable_gems:
             return self.search_strategy
         else:
+            if game_state.behaviour_state != BehaviourState.COLLECTING_GEM:
+                print(f"Switching to COLLECTING_GEM behaviour.", file=sys.stderr)
+            game_state.behaviour_state = BehaviourState.COLLECTING_GEM
             return self.greedy_strategy
 
     def decide(self, game_state: GameState) -> tuple[Coords, list[Coords]]:
