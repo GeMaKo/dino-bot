@@ -5,11 +5,15 @@ from functools import cached_property
 
 from src.bot_logic import (
     check_reachable_gem,
+    get_adjacents,
     get_bot_enemy_2_gem_distances,
+    get_diagonal_adjacents,
 )
 from src.debug import highlight_coords
-from src.pathfinding import find_path
+from src.graph import find_articulation_points, find_bridges, find_dead_ends_and_rooms
+from src.pathfinding import cached_find_path, manhattan
 from src.schemas import BehaviourState, Coords, EnemyBot, Floor, GameConfig, Gem, Wall
+from src.visibility import compute_fov
 
 
 @dataclass
@@ -30,7 +34,7 @@ class GameState:
     last_bot_pos: Coords | None = None
     config: GameConfig | None = field(default=None)
     current_strategy: str = field(default="")
-    debug_mode: bool = field(default=False)
+    debug_mode: bool = field(default=True)
     recent_positions: list[Coords] = field(default_factory=list)
     bot_adjacent_positions: set[Coords] = field(default_factory=set)
     bot_diagonal_positions: set[Coords] = field(default_factory=set)
@@ -46,6 +50,13 @@ class GameState:
     patrol_points_visited: deque[Coords] = field(
         default_factory=lambda: deque(maxlen=2)
     )
+    exploration_points_visited: list[Coords] = field(default_factory=list)
+    current_patrol_path: list[Coords] | None = field(default_factory=list)
+    floor_graph: dict[Coords, set[Coords]] = field(default_factory=dict)
+    graph_articulation_points: set[Coords] = field(default_factory=set)
+    graph_bridges: set[tuple[Coords, Coords]] = field(default_factory=set)
+    visibility_grid: list[list[bool]] = field(default_factory=list)
+    dead_ends: set[Coords] = field(default_factory=set)
 
     def __post_init__(self):
         if self.config is not None:
@@ -64,7 +75,7 @@ class GameState:
             for y in range(self.config.height):
                 pos = Coords(x, y)
                 if (
-                    pos not in self.wall_positions
+                    pos not in self.known_wall_positions
                     and pos not in self.known_floor_positions
                 ):
                     hidden.append(pos)
@@ -76,7 +87,7 @@ class GameState:
         return Coords(self.config.width // 2, self.config.height // 2)
 
     @property
-    def wall_positions(self) -> set[Coords]:
+    def known_wall_positions(self) -> set[Coords]:
         return set(self.known_walls.keys())
 
     @property
@@ -91,6 +102,69 @@ class GameState:
     def gem_positions(self) -> set[Coords]:
         return set(self.known_gems.keys())
 
+    def generate_visibility_grid(self):
+        """
+        Generate a 2D grid representing the visibility map.
+        """
+        assert self.config is not None, (
+            "GameConfig must be set to generate visibility grid"
+        )
+        self.visibility_grid = [
+            [False for _ in range(self.config.width)] for _ in range(self.config.height)
+        ]
+        for wall in self.known_wall_positions:
+            self.visibility_grid[wall.y][wall.x] = True
+
+    def update_view_points(self):
+        self.view_points[self.bot] = {f.position for f in self.floor}
+
+    def update_patrol_points(self):
+        # Select the best patrol points based on deadends and viewpoints
+        assert self.dead_ends, "Deadends must be defined before updating patrol points."
+        assert self.view_points, (
+            "Viewpoints must be defined before updating patrol points."
+        )
+
+        best_viewpoints = set()
+
+        # Step 1: Select the best viewpoints for deadends
+        for deadend in self.dead_ends:
+            # Filter viewpoints that can see the deadend
+            visible_viewpoints = {
+                vp
+                for vp in self.view_points.keys()
+                if deadend in self.view_points.get(vp, set())
+            }
+
+            if visible_viewpoints:
+                # Find the viewpoint that maximizes visibility of the deadend and its surroundings
+                best_viewpoint = max(
+                    visible_viewpoints,
+                    key=lambda vp: (
+                        len(self.view_points.get(vp, set())),  # Total visibility
+                        manhattan(deadend, vp),  # Distance from the deadend
+                    ),
+                )
+                best_viewpoints.add(best_viewpoint)
+
+        # Step 2: Ensure all known floors are covered without overriding deadend-focused points
+        uncovered_floors = self.known_floor_positions.copy()
+        for vp in best_viewpoints:
+            uncovered_floors -= self.view_points.get(vp, set())
+
+        while uncovered_floors:
+            # Find the viewpoint that covers the most uncovered floors, but avoid overriding deadend-focused points
+            best_additional_viewpoint = max(
+                self.view_points.keys() - best_viewpoints,
+                key=lambda vp: len(self.view_points.get(vp, set()) & uncovered_floors),
+            )
+            best_viewpoints.add(best_additional_viewpoint)
+            uncovered_floors -= self.view_points.get(best_additional_viewpoint, set())
+
+        # Update patrol points and highlight them
+        self.patrol_points = best_viewpoints
+        highlight_coords.extend(self.patrol_points)
+
     def update_known_gems(self):
         assert self.config is not None, "GameConfig must be set to update known gems"
         # Decrease TTL for all known gems
@@ -104,15 +178,30 @@ class GameState:
             gem.reachable = check_reachable_gem(
                 self.bot,
                 gem,
-                self.wall_positions,
+                self.known_wall_positions,
                 self.config.width,
                 self.config.height,
             )
         self.known_gems.pop(self.bot, None)
 
-    def update_view_points(self):
-        self.view_points[self.bot] = self.visible_floor_positions
-        # print(f"Number of view points: {len(self.view_points)}", file=sys.stderr)
+    def update_floor_graph(self):
+        """
+        Incrementally update the floor graph when new floors are added or removed.
+        """
+        for floor in self.known_floor_positions:
+            # Add the new floor as a node
+            self.floor_graph[floor] = set()
+            # Connect to existing neighbors
+            for neighbor in get_adjacents(floor):
+                if neighbor in self.floor_graph:
+                    self.floor_graph[floor].add(neighbor)
+                    self.floor_graph[neighbor].add(floor)
+
+    def update_bottleneck_info(self):
+        self.graph_articulation_points = find_articulation_points(self.floor_graph)
+        self.graph_bridges = find_bridges(self.floor_graph)
+        if self.debug_mode:
+            highlight_coords.extend(self.graph_articulation_points)
 
     def update_known_walls(self):
         for wall in self.wall:
@@ -123,24 +212,36 @@ class GameState:
             self.known_floors[floor.position] = floor
 
     def update_hidden_positions(self):
-        self.hidden_positions -= self.known_floor_positions | self.wall_positions
+        self.hidden_positions -= self.known_floor_positions | self.known_wall_positions
 
     def update_bot_adjacent_positions(self):
-        self.bot_adjacent_positions = {
-            Coords(self.bot.x + dx, self.bot.y + dy)
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-        }
+        self.bot_adjacent_positions = get_adjacents(self.bot)
 
     def update_bot_diagonal_adjacent_positions(self):
-        self.bot_diagonal_positions = {
-            Coords(self.bot.x + dx, self.bot.y + dy)
-            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]
-        }
+        self.bot_diagonal_positions = get_diagonal_adjacents(self.bot)
 
     def update_recent_positions(self, limit: int):
         self.recent_positions.append(self.bot)
         if len(self.recent_positions) > limit:
             self.recent_positions.pop(0)
+
+    def update_dead_ends_and_rooms(self):
+        self.dead_ends = find_dead_ends_and_rooms(self.floor_graph)
+        highlight_coords.extend(self.dead_ends)
+
+    def precompute_visibility_map(self):
+        """
+        TOO EXPENSIVE
+        Precompute visibility for all known floor tiles.
+        """
+        assert self.config is not None, (
+            "GameConfig must be set to precompute visibility map"
+        )
+        for floor in self.known_floor_positions:
+            if floor not in self.view_points:
+                self.view_points[floor] = compute_fov(
+                    self.visibility_grid, floor, self.config.vis_radius
+                )
 
     def recalculate_gem_distances(self):
         for pos, gem in list(self.known_gems.items()):
@@ -184,10 +285,10 @@ class GameState:
             for src in all_positions:
                 for dst in all_positions:
                     if src != dst:
-                        seg = find_path(
+                        seg = cached_find_path(
                             src,
                             dst,
-                            self.wall_positions,
+                            self.known_wall_positions,
                             self.config.width,
                             self.config.height,
                         )
@@ -201,10 +302,10 @@ class GameState:
             if self.debug_mode:
                 print("[GameState] Updating bot-to-gem distances", file=sys.stderr)
             for gem_pos in gem_positions:
-                seg = find_path(
+                seg = cached_find_path(
                     bot_pos,
                     gem_pos,
-                    self.wall_positions,
+                    self.known_wall_positions,
                     self.config.width,
                     self.config.height,
                 )
@@ -301,12 +402,22 @@ class GameState:
         ]
 
     def refresh(self):
-        self.update_known_floors()
-        self.update_known_walls()
-        self.update_known_gems()
-        self.update_hidden_positions()
+        self.update_dead_ends_and_rooms()
+
+        if self.behaviour_state == BehaviourState.EXPLORING:
+            self.update_known_walls()
+            self.update_hidden_positions()
+            self.update_floor_graph()
+            # self.generate_visibility_grid()
+            # self.update_bottleneck_info()
+            # self.precompute_visibility_map()
+        if self.behaviour_state == BehaviourState.PATROLLING:
+            self.update_patrol_points()
         self.update_view_points()
+        self.update_known_floors()
+        self.update_dead_ends_and_rooms()
+        self.update_known_gems()
         self.recalculate_gem_distances()
-        self.recalculate_distance_matrix()
+        # self.recalculate_distance_matrix()
         self.update_bot_adjacent_positions()
         self.update_bot_diagonal_adjacent_positions()

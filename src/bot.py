@@ -9,6 +9,7 @@ from src.config import (
 from src.debug import highlight_coords
 from src.gamestate import GameState
 from src.schemas import (
+    BehaviourState,
     Coords,
     Direction,
     GameConfig,
@@ -128,19 +129,18 @@ class CollectorBot:
             self.game_state.refresh()
 
             move, next_path = self.process_game_state()
-            highlight_visible_walls = [
-                [w.position.x, w.position.y, "#ff0000"] for w in self.game_state.wall
-            ]
             highlight_next_path = [[w.x, w.y, "#00ff11"] for w in next_path]
             highlight = {
                 "highlight": [
-                    [w.x, w.y, "#2f00ff"] for w in self.game_state.wall_positions
+                    [w.x, w.y, "#2f00ff"] for w in self.game_state.known_wall_positions
                 ]
                 + highlight_next_path
                 # + [[14, 16, "#ffff00"]]  # Highlight debug position
                 + [[c.x, c.y, "#ffff00"] for c in highlight_coords]
             }
             highlight_coords.clear()
+            if self.game_state.behaviour_state == BehaviourState.EXPLORING:
+                self.game_state.exploration_points_visited.append(self.game_state.bot)
             print(
                 f"{move} {json.dumps(highlight)}",
                 flush=True,

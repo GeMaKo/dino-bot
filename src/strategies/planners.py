@@ -1,11 +1,14 @@
 import heapq
 import sys
 
-from src.bot_logic import solve_set_cover
 from src.debug import highlight_coords
 from src.gamestate import GameState
-from src.pathfinding import find_path, manhattan
+from src.pathfinding import cached_find_path, manhattan
 from src.schemas import BehaviourState, Coords
+from src.strategies.aco import ant_colony_optimization
+from src.strategies.exploration import find_hidden_positions
+from src.strategies.set_cover import set_cover_patrol
+from src.strategies.simple import oldest_floor_patrol
 
 
 def greedy_planner(game_state: GameState) -> list[Coords]:
@@ -23,117 +26,29 @@ def greedy_planner(game_state: GameState) -> list[Coords]:
     return candidates
 
 
-def patrol_oldest_floor(game_state: GameState) -> list[Coords]:
-    oldest_floor = min(
-        game_state.known_floors.values(),
-        key=lambda f: f.last_seen,
+def aco_patrol_planner(game_state: GameState) -> list[Coords]:
+    """
+    Plan patrol or collection path using Ant Colony Optimization (ACO).
+    """
+    if not game_state.patrol_points:
+        highlight_coords.extend(game_state.exploration_points_visited)
+        game_state.patrol_points = set(game_state.exploration_points_visited)
+
+    best_path = ant_colony_optimization(
+        start=game_state.bot,
+        targets=game_state.patrol_points,
+        walls=game_state.known_wall_positions,
+        width=game_state.config.width,
+        height=game_state.config.height,
+        distance_function=cached_find_path,
     )
-    return [oldest_floor.position]
-
-
-def order_patrol_points(
-    start: Coords,
-    patrol_points: set[Coords],
-    forbidden: set[Coords],
-    width: int,
-    height: int,
-    patrol_points_visited: set[Coords],
-    visited_penalty: int = 100,
-) -> list[Coords]:
-    if patrol_points_visited is None:
-        patrol_points_visited = set()
-    route = []
-    points = set(patrol_points)
-    current = start
-    while points:
-        next_point = min(
-            points,
-            key=lambda p: (
-                len(find_path(current, p, forbidden, width, height))
-                + (visited_penalty if p in patrol_points_visited else 0)
-            ),
-        )
-        route.append(next_point)
-        points.remove(next_point)
-        current = next_point
-    return route
-
-
-def patrol_set_cover(game_state: GameState) -> list[Coords]:
-    if not game_state.patrol_points or game_state.tick % 100 == 0:
-        print("Recomputing patrol points using set cover.", file=sys.stderr)
-        game_state.patrol_points = solve_set_cover(
-            game_state.view_points, set(game_state.known_floors.keys())
-        )
-    # Find the closest patrol point to the bot
-    if game_state.behaviour_state != BehaviourState.PATROLLING:
-        print("Switching to PATROLLING behaviour.", file=sys.stderr)
-        game_state.behaviour_state = BehaviourState.PATROLLING
-        closest = min(
-            game_state.patrol_points,
-            key=lambda p: len(
-                find_path(
-                    game_state.bot,
-                    p,
-                    game_state.wall_positions,
-                    game_state.config.width,
-                    game_state.config.height,
-                )
-            ),
-        )
-        # Order patrol points starting from the closest
-        ordered_route = order_patrol_points(
-            closest,
-            game_state.patrol_points,
-            game_state.wall_positions,
-            game_state.config.width,
-            game_state.config.height,
-            set(game_state.patrol_points_visited),
-        )
-        game_state.patrol_route = ordered_route
-        # Set patrol_index to the closest point
-        game_state.patrol_index = 0
-
-    target = game_state.patrol_route[game_state.patrol_index]
-    highlight_coords.extend(game_state.patrol_route)
-
-    # Advance patrol_index when bot arrives at the target
-    if game_state.bot == target:
-        game_state.patrol_index = (game_state.patrol_index + 1) % len(
-            game_state.patrol_route
-        )
-        game_state.patrol_points_visited.append(target)
-        target = game_state.patrol_route[game_state.patrol_index]
-    return [target]
-
-
-def find_hidden_positions(game_state: GameState) -> list[Coords]:
-    """Return hidden positions adjacent to known floor tiles."""
-    assert game_state.config is not None, (
-        "GameConfig must be set to find hidden positions"
-    )
-    known_floor_positions = set(game_state.known_floors.keys())
-
-    def _adjacent(pos: Coords, width: int, height: int) -> list[Coords]:
-        return [
-            Coords(pos.x + dx, pos.y + dy)
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-            if 0 <= pos.x + dx < width and 0 <= pos.y + dy < height
-        ]
-
-    hidden = [
-        pos
-        for pos in game_state.hidden_positions
-        if any(
-            adj in known_floor_positions
-            for adj in _adjacent(pos, game_state.config.width, game_state.config.height)
-        )
-    ]
-    return hidden
+    highlight_coords.extend(best_path)
+    game_state.current_patrol_path = best_path
+    return best_path
 
 
 def cave_explore_planner(
-    game_state: GameState, patrol_mode: str = "set_cover"
+    game_state: GameState, patrol_mode: str = "oldest"
 ) -> list[Coords]:
     """Plan moves to hidden positions blocked by walls, or oldest visited floor."""
     if game_state.config is None:
@@ -167,10 +82,10 @@ def cave_explore_planner(
             target = min(
                 top3targets,
                 key=lambda pos: len(
-                    find_path(
+                    cached_find_path(
                         game_state.bot,
                         pos,
-                        game_state.wall_positions,
+                        game_state.known_wall_positions,
                         game_state.config.width,
                         game_state.config.height,
                     )
@@ -179,10 +94,13 @@ def cave_explore_planner(
             game_state.explore_target = target
         return [target]
     if game_state.known_floors:
+        if game_state.behaviour_state != BehaviourState.PATROLLING:
+            print("Switching to PATROLLING behaviour.", file=sys.stderr)
+            game_state.behaviour_state = BehaviourState.PATROLLING
         if patrol_mode == "oldest":
-            return patrol_oldest_floor(game_state)
+            return oldest_floor_patrol(game_state)
         elif patrol_mode == "set_cover":
-            return patrol_set_cover(game_state)
+            return set_cover_patrol(game_state)
     # Fallback: stay in place
     return [game_state.bot]
 

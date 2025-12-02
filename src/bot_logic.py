@@ -1,6 +1,7 @@
 import itertools
+from functools import lru_cache
 
-from src.pathfinding import find_path, manhattan
+from src.pathfinding import cached_find_path, manhattan
 from src.schemas import Coords, EnemyBot, Gem, Wall
 
 
@@ -60,7 +61,7 @@ def check_reachable_gem(
     width: int,
     height: int,
 ) -> bool:
-    gem_path = find_path(
+    gem_path = cached_find_path(
         start=bot_pos,
         goal=gem.position,
         forbidden=walls,
@@ -86,37 +87,6 @@ def get_distances(
     gems = get_bot2gems_distances(bot_pos, gems)
     gems = analyze_enemies(enemies, gems)
     return gems
-
-
-def solve_set_cover(
-    view_points: dict[Coords, set[Coords]], universe: set[Coords]
-) -> set[Coords]:
-    """Solve the set cover problem using a greedy algorithm."""
-    covery_sets = view_points.copy()
-    covered = set()
-    selected_sets = set()
-
-    while covered != universe:
-        best_set = None
-        best_coverage = 0
-
-        for s, elements in covery_sets.items():
-            coverage = len(elements - covered)
-            if coverage > best_coverage:
-                best_coverage = coverage
-                best_set = s
-
-        if best_set is None:
-            break  # No more sets can cover new elements
-
-        selected_sets.add(best_set)
-        covered.update(covery_sets[best_set])
-        del covery_sets[best_set]
-
-    if covered == universe:
-        return selected_sets
-    else:
-        return set()
 
 
 def get_best_gem_collection_path(
@@ -159,7 +129,7 @@ def get_best_gem_collection_path(
         for i, src in enumerate(positions):
             for j, dst in enumerate(positions):
                 if i != j:
-                    seg = find_path(src, dst, get_forbidden(0), width, height)
+                    seg = cached_find_path(src, dst, get_forbidden(0), width, height)
                     path_segs[(src, dst)] = seg
                     path_lengths[(src, dst)] = len(seg) if seg else float("inf")
 
@@ -193,3 +163,42 @@ def get_best_gem_collection_path(
             best_path = path
 
     return best_path
+
+
+@lru_cache(maxsize=None)
+def get_adjacents(pos: Coords) -> set[Coords]:
+    """Return adjacent coordinates within bounds."""
+    return {
+        Coords(pos.x + dx, pos.y + dy) for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    }
+
+
+@lru_cache(maxsize=None)
+def get_diagonal_adjacents(pos: Coords) -> set[Coords]:
+    """Return diagonal adjacent coordinates within bounds."""
+    return {
+        Coords(pos.x + dx, pos.y + dy)
+        for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+    }
+
+
+@lru_cache(maxsize=None)
+def _cached_get_adjacent_floors(
+    pos: Coords,
+    known_floors: frozenset[Coords],
+    width: int,
+    height: int,
+) -> set[Coords]:
+    """Cached version of get_adjacent_floors."""
+    adjacents = get_adjacents(pos, width, height)
+    return {adj for adj in adjacents if adj in known_floors}
+
+
+def get_adjacent_floors(
+    pos: Coords,
+    known_floors: set[Coords],
+    width: int,
+    height: int,
+) -> set[Coords]:
+    """Wrapper for get_adjacent_floors with caching."""
+    return _cached_get_adjacent_floors(pos, frozenset(known_floors), width, height)

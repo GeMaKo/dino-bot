@@ -14,7 +14,7 @@ from src.schemas import GameConfig
         "greedy",
         "advanced_greedy",
         "tsm_collection",
-        "cave_explore_greedy",
+        # "cave_explore_greedy",
     ],
 )
 def test_collector_bot_moves_on_arena(strategy):

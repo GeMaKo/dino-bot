@@ -28,6 +28,17 @@ class Coords:
     x: int
     y: int
 
+    def __eq__(self, other):
+        return isinstance(other, Coords) and self.x == other.x and self.y == other.y
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+    def __lt__(self, other):
+        if not isinstance(other, Coords):
+            return NotImplemented
+        return (self.x, self.y) < (other.x, other.y)
+
 
 class Direction(Enum):
     LEFT = Coords(-1, 0)
