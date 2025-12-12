@@ -41,7 +41,7 @@ class GameState:
     hidden_positions: set[Coords] = field(default_factory=set)
     cave_revealed: bool = field(default=False)
     explore_target: Coords | None = field(default=None)
-    view_points: dict[Coords, set[Coords]] = field(default_factory=dict)
+    visibility_map: dict[Coords, set[Coords]] = field(default_factory=dict)
     highlight_sink: list[Coords] | None = None
     patrol_route: list[Coords] = field(default_factory=list)
     patrol_points: set[Coords] = field(default_factory=set)
@@ -115,51 +115,59 @@ class GameState:
         for wall in self.known_wall_positions:
             self.visibility_grid[wall.y][wall.x] = True
 
-    def update_view_points(self):
-        self.view_points[self.bot] = {f.position for f in self.floor}
+    def refresh_visibility_map(self):
+        self.visibility_map[self.bot] = {f.position for f in self.floor}
 
     def update_patrol_points(self):
-        # Select the best patrol points based on deadends and viewpoints
-        assert self.dead_ends, "Deadends must be defined before updating patrol points."
-        assert self.view_points, (
-            "Viewpoints must be defined before updating patrol points."
+        """
+        Select the best patrol points based on dead ends and visibility.
+        """
+        assert self.dead_ends, (
+            "Dead ends must be defined before updating patrol points."
+        )
+        assert self.visibility_map, (
+            "Visibility map must be defined before updating patrol points."
         )
 
         best_viewpoints = set()
 
-        # Step 1: Select the best viewpoints for deadends
-        for deadend in self.dead_ends:
-            # Filter viewpoints that can see the deadend
+        # Step 1: Select the best viewpoints for dead ends
+        for dead_end in self.dead_ends:
+            # Filter viewpoints that can see the dead end
             visible_viewpoints = {
                 vp
-                for vp in self.view_points.keys()
-                if deadend in self.view_points.get(vp, set())
+                for vp in self.visibility_map.keys()
+                if dead_end in self.visibility_map.get(vp, set())
             }
 
             if visible_viewpoints:
-                # Find the viewpoint that maximizes visibility of the deadend and its surroundings
+                # Find the viewpoint that maximizes visibility of the dead end and its surroundings
                 best_viewpoint = max(
                     visible_viewpoints,
                     key=lambda vp: (
-                        len(self.view_points.get(vp, set())),  # Total visibility
-                        manhattan(deadend, vp),  # Distance from the deadend
+                        len(self.visibility_map.get(vp, set())),  # Total visibility
+                        manhattan(dead_end, vp),  # Distance from the dead end
                     ),
                 )
                 best_viewpoints.add(best_viewpoint)
 
-        # Step 2: Ensure all known floors are covered without overriding deadend-focused points
+        # Step 2: Ensure all known floors are covered without overriding dead end-focused points
         uncovered_floors = self.known_floor_positions.copy()
         for vp in best_viewpoints:
-            uncovered_floors -= self.view_points.get(vp, set())
+            uncovered_floors -= self.visibility_map.get(vp, set())
 
         while uncovered_floors:
-            # Find the viewpoint that covers the most uncovered floors, but avoid overriding deadend-focused points
+            # Find the viewpoint that covers the most uncovered floors, but avoid overriding dead end-focused points
             best_additional_viewpoint = max(
-                self.view_points.keys() - best_viewpoints,
-                key=lambda vp: len(self.view_points.get(vp, set()) & uncovered_floors),
+                self.visibility_map.keys() - best_viewpoints,
+                key=lambda vp: len(
+                    self.visibility_map.get(vp, set()) & uncovered_floors
+                ),
             )
             best_viewpoints.add(best_additional_viewpoint)
-            uncovered_floors -= self.view_points.get(best_additional_viewpoint, set())
+            uncovered_floors -= self.visibility_map.get(
+                best_additional_viewpoint, set()
+            )
 
         # Update patrol points and highlight them
         self.patrol_points = best_viewpoints
@@ -238,8 +246,8 @@ class GameState:
             "GameConfig must be set to precompute visibility map"
         )
         for floor in self.known_floor_positions:
-            if floor not in self.view_points:
-                self.view_points[floor] = compute_fov(
+            if floor not in self.visibility_map:
+                self.visibility_map[floor] = compute_fov(
                     self.visibility_grid, floor, self.config.vis_radius
                 )
 
@@ -413,7 +421,7 @@ class GameState:
             # self.precompute_visibility_map()
         if self.behaviour_state == BehaviourState.PATROLLING:
             self.update_patrol_points()
-        self.update_view_points()
+        self.refresh_visibility_map()
         self.update_known_floors()
         self.update_dead_ends_and_rooms()
         self.update_known_gems()

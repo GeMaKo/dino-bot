@@ -148,11 +148,11 @@ def set_cover_patrol(game_state: GameState, strategy: str = "anderes") -> list[C
         print("Recomputing patrol points using set cover.", file=sys.stderr)
         if strategy == "optimal":
             game_state.patrol_points = solve_set_cover_optimal(
-                game_state.view_points, set(game_state.known_floors.keys())
+                game_state.visibility_map, set(game_state.known_floors.keys())
             )
         else:
             game_state.patrol_points = solve_weighted_set_cover(
-                game_state.view_points,
+                game_state.visibility_map,
                 set(game_state.known_floors.keys()),
                 game_state.bot,
                 cached_find_path,
