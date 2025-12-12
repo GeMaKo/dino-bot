@@ -97,6 +97,18 @@ def find_path(
         height=height,
         goal=goal,  # Pass goal for axis prioritization
     )
+    # If the path is empty, check if reversing start and goal yields a valid path
+    if not path_tuples:
+        reverse_path = bfs(
+            goal,
+            is_goal=lambda pos, path: pos == start,
+            forbidden=forbidden,
+            width=width,
+            height=height,
+            goal=start,
+        )
+        return reverse_path[::-1]  # Reverse the path to match the original direction
+
     return path_tuples
 
 
@@ -104,21 +116,18 @@ def cached_path_decorator(func):
     cache = {}
 
     def wrapper(start, goal, forbidden, width, height):
-        # Normalize the key so (start, goal) is the same as (goal, start)
-        normalized_key = tuple(sorted([start, goal])) + (
-            frozenset(forbidden),
-            width,
-            height,
-        )
+        # Use (start, goal) as the cache key directly
+        cache_key = (start, goal, frozenset(forbidden), width, height)
 
-        if normalized_key not in cache:
+        if cache_key not in cache:
             # Compute the path and store it in the cache
             path = func(start, goal, forbidden, width, height)
-            cache[normalized_key] = path
+            cache[cache_key] = path
             if len(cache) % 200 == 0:
                 print(f"[Pathfinding] Cache size: {len(cache)}", file=sys.stderr)
 
-        return cache[normalized_key]
+        # Return the cached path
+        return cache[cache_key]
 
     return wrapper
 
