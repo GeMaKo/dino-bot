@@ -89,6 +89,44 @@ def get_distances(
     return gems
 
 
+def find_viewpoints(
+    graph: dict[Coords, set[Coords]],
+    visibility_map: dict[Coords, set[Coords]],
+    dead_ends: set[Coords],
+) -> set[Coords]:
+    """
+    Find viewpoints that are as far away as possible from dead ends while maximizing visibility.
+    Args:
+        graph (dict): The adjacency list representation of the graph.
+        visibility_map (dict): Precomputed visibility map for each floor tile.
+        dead_ends (set): A set of dead end coordinates.
+    Returns:
+        set: A set of viewpoints (Coords).
+    """
+    viewpoints = set()
+
+    for dead_end in dead_ends:
+        # Filter viewpoints that can see the dead end
+        visible_viewpoints = {
+            vp
+            for vp in visibility_map.keys()
+            if dead_end in visibility_map.get(vp, set())
+        }
+
+        if visible_viewpoints:
+            # Find the viewpoint that maximizes visibility of the dead end and its surroundings
+            best_viewpoint = max(
+                visible_viewpoints,
+                key=lambda vp: (
+                    len(visibility_map.get(vp, set())),  # Total visibility
+                    manhattan(dead_end, vp),  # Distance from the dead end
+                ),
+            )
+            viewpoints.add(best_viewpoint)
+
+    return viewpoints
+
+
 def get_best_gem_collection_path(
     bot_pos: Coords,
     gems: list[Gem],

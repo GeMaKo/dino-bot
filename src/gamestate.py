@@ -1,17 +1,17 @@
 import sys
-from collections import deque
 from dataclasses import dataclass, field
 from functools import cached_property
 
 from src.bot_logic import (
     check_reachable_gem,
+    find_viewpoints,
     get_adjacents,
     get_bot_enemy_2_gem_distances,
     get_diagonal_adjacents,
 )
-from src.debug import highlight_coords
+from src.debug import HighlightCoords, highlight_coords
 from src.graph import find_articulation_points, find_bridges, find_dead_ends_and_rooms
-from src.pathfinding import cached_find_path, manhattan
+from src.pathfinding import cached_find_path
 from src.schemas import BehaviourState, Coords, EnemyBot, Floor, GameConfig, Gem, Wall
 from src.visibility import compute_fov
 
@@ -42,14 +42,10 @@ class GameState:
     cave_revealed: bool = field(default=False)
     explore_target: Coords | None = field(default=None)
     visibility_map: dict[Coords, set[Coords]] = field(default_factory=dict)
-    highlight_sink: list[Coords] | None = None
-    patrol_route: list[Coords] = field(default_factory=list)
+    highlight_sink: list[HighlightCoords] | None = None
     patrol_points: set[Coords] = field(default_factory=set)
     patrol_index: int = field(default=0)
     behaviour_state: BehaviourState = field(default=BehaviourState.IDLE)
-    patrol_points_visited: deque[Coords] = field(
-        default_factory=lambda: deque(maxlen=2)
-    )
     exploration_points_visited: list[Coords] = field(default_factory=list)
     current_patrol_path: list[Coords] | None = field(default_factory=list)
     floor_graph: dict[Coords, set[Coords]] = field(default_factory=dict)
@@ -128,28 +124,9 @@ class GameState:
         assert self.visibility_map, (
             "Visibility map must be defined before updating patrol points."
         )
-
-        best_viewpoints = set()
-
-        # Step 1: Select the best viewpoints for dead ends
-        for dead_end in self.dead_ends:
-            # Filter viewpoints that can see the dead end
-            visible_viewpoints = {
-                vp
-                for vp in self.visibility_map.keys()
-                if dead_end in self.visibility_map.get(vp, set())
-            }
-
-            if visible_viewpoints:
-                # Find the viewpoint that maximizes visibility of the dead end and its surroundings
-                best_viewpoint = max(
-                    visible_viewpoints,
-                    key=lambda vp: (
-                        len(self.visibility_map.get(vp, set())),  # Total visibility
-                        manhattan(dead_end, vp),  # Distance from the dead end
-                    ),
-                )
-                best_viewpoints.add(best_viewpoint)
+        best_viewpoints = find_viewpoints(
+            self.floor_graph, self.visibility_map, self.dead_ends
+        )
 
         # Step 2: Ensure all known floors are covered without overriding dead end-focused points
         uncovered_floors = self.known_floor_positions.copy()
@@ -171,7 +148,35 @@ class GameState:
 
         # Update patrol points and highlight them
         self.patrol_points = best_viewpoints
-        highlight_coords.extend(self.patrol_points)
+        highlight_coords.append(
+            HighlightCoords("patrol_points", list(self.patrol_points), "#00ffff")
+        )
+
+    def precompute_patrol_paths(self):
+        """
+        Precompute the shortest paths between all patrol points.
+        """
+        assert self.config is not None, (
+            "GameConfig must be set to precompute patrol paths."
+        )
+        self.path_segments = {}
+        patrol_points = list(self.patrol_points)
+
+        for i, src in enumerate(patrol_points):
+            for j, dst in enumerate(patrol_points):
+                if i != j:
+                    path = get_pre_filled_cached_path(
+                        start=src,
+                        target=dst,
+                        forbidden=self.known_wall_positions,
+                        game_state=self,
+                    )
+                    if path:
+                        self.path_segments[(src, dst)] = path
+        # print(
+        #    f"[GameState] Precomputed {len(self.path_segments)} patrol paths.",
+        #    file=sys.stderr,
+        # )
 
     def update_known_gems(self):
         assert self.config is not None, "GameConfig must be set to update known gems"
@@ -209,7 +214,13 @@ class GameState:
         self.graph_articulation_points = find_articulation_points(self.floor_graph)
         self.graph_bridges = find_bridges(self.floor_graph)
         if self.debug_mode:
-            highlight_coords.extend(self.graph_articulation_points)
+            highlight_coords.append(
+                HighlightCoords(
+                    "articulation_points",
+                    list(self.graph_articulation_points),
+                    "#ff0000",
+                )
+            )
 
     def update_known_walls(self):
         for wall in self.wall:
@@ -235,7 +246,36 @@ class GameState:
 
     def update_dead_ends_and_rooms(self):
         self.dead_ends = find_dead_ends_and_rooms(self.floor_graph)
-        highlight_coords.extend(self.dead_ends)
+        highlight_coords.append(
+            HighlightCoords("dead_ends", list(self.dead_ends), "#ff00ff")
+        )
+
+    def update_hidden_floors(self) -> list[Coords]:
+        """Return hidden positions adjacent to known floor tiles."""
+        assert self.config is not None, (
+            "GameConfig must be set to find hidden positions"
+        )
+        known_floor_positions = set(self.known_floors.keys())
+
+        def _adjacent(pos: Coords, width: int, height: int) -> list[Coords]:
+            return [
+                Coords(pos.x + dx, pos.y + dy)
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
+                if 0 <= pos.x + dx < width and 0 <= pos.y + dy < height
+            ]
+
+        hidden = [
+            pos
+            for pos in self.hidden_positions
+            if any(
+                adj in known_floor_positions
+                for adj in _adjacent(pos, self.config.width, self.config.height)
+            )
+        ]
+        if hidden == []:
+            self.cave_revealed = True
+            print("[GameState] Cave fully revealed.", file=sys.stderr)
+        return hidden
 
     def precompute_visibility_map(self):
         """
@@ -293,12 +333,11 @@ class GameState:
             for src in all_positions:
                 for dst in all_positions:
                     if src != dst:
-                        seg = cached_find_path(
-                            src,
-                            dst,
-                            self.known_wall_positions,
-                            self.config.width,
-                            self.config.height,
+                        seg = get_pre_filled_cached_path(
+                            start=src,
+                            target=dst,
+                            forbidden=self.known_wall_positions,
+                            game_state=self,
                         )
                         self.path_segments[(src, dst)] = seg
                         self.distance_matrix[(src, dst)] = (
@@ -310,12 +349,11 @@ class GameState:
             if self.debug_mode:
                 print("[GameState] Updating bot-to-gem distances", file=sys.stderr)
             for gem_pos in gem_positions:
-                seg = cached_find_path(
-                    bot_pos,
-                    gem_pos,
-                    self.known_wall_positions,
-                    self.config.width,
-                    self.config.height,
+                seg = get_pre_filled_cached_path(
+                    start=bot_pos,
+                    forbidden=self.known_wall_positions,
+                    target=gem_pos,
+                    game_state=self,
                 )
                 self.path_segments[(bot_pos, gem_pos)] = seg
                 self.distance_matrix[(bot_pos, gem_pos)] = (
@@ -409,18 +447,27 @@ class GameState:
             and len(b["position"]) == 2
         ]
 
+    def refresh_patrol_data(self):
+        """
+        Refresh patrol points and paths based on the current game state.
+        """
+        self.update_patrol_points()
+        self.precompute_patrol_paths()
+
     def refresh(self):
         self.update_dead_ends_and_rooms()
 
         if self.behaviour_state == BehaviourState.EXPLORING:
             self.update_known_walls()
-            self.update_hidden_positions()
+            if self.cave_revealed is False:
+                self.update_hidden_positions()
             self.update_floor_graph()
+
             # self.generate_visibility_grid()
             # self.update_bottleneck_info()
             # self.precompute_visibility_map()
         if self.behaviour_state == BehaviourState.PATROLLING:
-            self.update_patrol_points()
+            self.refresh_patrol_data()
         self.refresh_visibility_map()
         self.update_known_floors()
         self.update_dead_ends_and_rooms()
@@ -429,3 +476,24 @@ class GameState:
         # self.recalculate_distance_matrix()
         self.update_bot_adjacent_positions()
         self.update_bot_diagonal_adjacent_positions()
+
+
+def get_pre_filled_cached_path(
+    start: Coords,
+    target: Coords,
+    forbidden: set[Coords],
+    game_state: GameState,
+) -> list[Coords]:
+    """
+    Wrapper function to get a pre-filled cached path using the game state.
+    """
+    assert game_state.config is not None, (
+        "GameConfig must be set to get pre-filled cached path"
+    )
+    return cached_find_path(
+        start=start,
+        goal=target,
+        forbidden=forbidden,
+        width=game_state.config.width,
+        height=game_state.config.height,
+    )

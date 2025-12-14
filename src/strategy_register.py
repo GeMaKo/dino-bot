@@ -1,15 +1,19 @@
+from src.strategies.combined import GlobalCombinedStrategy
 from src.strategies.evaluators import (
     advanced_search_evaluator,
-    cave_explore_evaluator,
-    greedy_blocking_evaluator,
     greedy_evaluator,
     simple_search_evaluator,
     tsm_evaluator,
 )
+from src.strategies.exploration import cave_explore_evaluator, cave_explore_planner
+from src.strategies.gem_collection import greedy_blocking_evaluator, greedy_planner
+from src.strategies.patrol import (
+    oldest_floor_patrol_planner,
+    patrol_evaluator,
+    simple_patrol_route_planner,
+)
 from src.strategies.planners import (
     advanced_search_planner,
-    cave_explore_planner,
-    greedy_planner,
     simple_search_planner,
 )
 from src.strategies.schemas import (
@@ -18,6 +22,49 @@ from src.strategies.schemas import (
     Strategy,
     simple_tie_breaker,
 )
+
+
+# Exploration strategy
+def create_exploration_strategy() -> LocalStrategy:
+    """Create and return an exploration strategy instance."""
+    return LocalStrategy(
+        name="ExplorationStrategy",
+        evaluator=cave_explore_evaluator,
+        planner=cave_explore_planner,
+        tie_breaker=simple_tie_breaker,
+    )
+
+
+# Patrol strategy
+def create_simple_patrol_route_strategy() -> LocalStrategy:
+    """Create and return a patrol strategy instance."""
+    return LocalStrategy(
+        name="SimplePatrolRouteStrategy",
+        evaluator=patrol_evaluator,
+        planner=simple_patrol_route_planner,
+        tie_breaker=simple_tie_breaker,
+    )
+
+
+def create_oldest_floor_patrol_strategy() -> LocalStrategy:
+    """Create and return an oldest floor patrol strategy instance."""
+    return LocalStrategy(
+        name="OldestFloorPatrolStrategy",
+        evaluator=patrol_evaluator,
+        planner=oldest_floor_patrol_planner,
+        tie_breaker=simple_tie_breaker,
+    )
+
+
+# Gem collection strategy
+def create_gem_collection_strategy() -> LocalStrategy:
+    """Create and return a gem collection strategy instance."""
+    return LocalStrategy(
+        name="GemCollectionStrategy",
+        evaluator=greedy_blocking_evaluator,
+        planner=greedy_planner,
+        tie_breaker=simple_tie_breaker,
+    )
 
 
 def create_local_greedy_strategy() -> LocalStrategy:
@@ -105,5 +152,11 @@ STRATEGY_REGISTRY: dict[str, Strategy] = {
         create_greedy_blocking_strategy(),
         create_cave_explore_strategy(),
         name="CaveExploreGreedyStrategy",
+    ),
+    "combined": GlobalCombinedStrategy(
+        exploration_strategy=create_exploration_strategy(),
+        patrol_strategy=create_oldest_floor_patrol_strategy(),
+        gem_collection_strategy=create_gem_collection_strategy(),
+        name="CombinedStrategy",
     ),
 }

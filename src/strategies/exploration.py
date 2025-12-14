@@ -1,27 +1,41 @@
-from src.gamestate import GameState
+import sys
+
+from src.debug import HighlightCoords, highlight_coords
+from src.gamestate import GameState, get_pre_filled_cached_path
 from src.schemas import Coords
 
 
-def find_hidden_positions(game_state: GameState) -> list[Coords]:
-    """Return hidden positions adjacent to known floor tiles."""
-    assert game_state.config is not None, (
-        "GameConfig must be set to find hidden positions"
+def cave_explore_planner(game_state: GameState) -> list[Coords]:
+    """Plan moves to all hidden positions."""
+    if game_state.config is None:
+        print("GameConfig must be set to plan moves", file=sys.stderr)
+        return []
+
+    hidden = game_state.update_hidden_floors()
+    highlight_coords.append(HighlightCoords("hidden_positions", hidden, "#ff00ff"))
+    return hidden  # Return all hidden positions as candidates
+
+
+def cave_explore_evaluator(
+    game_state: GameState, move: Coords
+) -> tuple[list[Coords], float]:
+    """Score moves by unexplored status and path length to oldest floor."""
+    if game_state.config is None:
+        return [], float("inf")
+
+    # Bonus for moving into a hole
+    bonus = (
+        -20
+        if move not in game_state.known_wall_positions
+        and move not in game_state.known_floor_positions
+        else 0
     )
-    known_floor_positions = set(game_state.known_floors.keys())
 
-    def _adjacent(pos: Coords, width: int, height: int) -> list[Coords]:
-        return [
-            Coords(pos.x + dx, pos.y + dy)
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-            if 0 <= pos.x + dx < width and 0 <= pos.y + dy < height
-        ]
-
-    hidden = [
-        pos
-        for pos in game_state.hidden_positions
-        if any(
-            adj in known_floor_positions
-            for adj in _adjacent(pos, game_state.config.width, game_state.config.height)
-        )
-    ]
-    return hidden
+    path = get_pre_filled_cached_path(
+        start=game_state.bot,
+        target=move,
+        forbidden=game_state.known_wall_positions,
+        game_state=game_state,
+    )
+    score = (len(path) if path else float("inf")) + bonus
+    return path if path else [], score

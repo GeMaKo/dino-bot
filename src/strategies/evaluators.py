@@ -2,8 +2,8 @@ import sys
 
 from src.bot_logic import get_best_gem_collection_path
 from src.config import CENTER_MOVE_WEIGHT, CENTER_STAY_WEIGHT, DISTANCE_TO_ENEMY
-from src.gamestate import GameState
-from src.pathfinding import cached_find_path, find_path, manhattan
+from src.gamestate import GameState, get_pre_filled_cached_path
+from src.pathfinding import manhattan
 from src.schemas import Coords
 
 
@@ -12,103 +12,13 @@ def greedy_evaluator(game_state: GameState, move: Coords) -> tuple[list[Coords],
     if game_state.config is None:
         print("GameConfig must be set to evaluate moves", file=sys.stderr)
         return [], float("inf")
-    path = cached_find_path(
+    path = get_pre_filled_cached_path(
         start=game_state.bot,
-        goal=move,
         forbidden=game_state.known_wall_positions,
-        width=game_state.config.width,
-        height=game_state.config.height,
+        target=move,
+        game_state=game_state,
     )
     return path, len(path) if path else float("inf")
-
-
-def _get_path(start, forbidden, target, game_state):
-    assert game_state.config is not None, "GameConfig must be set to evaluate moves"
-    return cached_find_path(
-        start=start,
-        goal=target,
-        forbidden=forbidden,
-        width=game_state.config.width,
-        height=game_state.config.height,
-    )
-
-
-def greedy_blocking_evaluator(
-    game_state: GameState, target: Coords
-) -> tuple[list[Coords], float]:
-    if game_state.config is None:
-        print("GameConfig must be set to evaluate moves", file=sys.stderr)
-        return [], float("inf")
-
-    # Default path if not close
-    bot_path = find_path(
-        start=game_state.bot,
-        goal=target,
-        forbidden=game_state.known_wall_positions,
-        width=game_state.config.width,
-        height=game_state.config.height,
-    )
-    score = len(bot_path) if bot_path else float("inf")
-
-    for enemy in game_state.visible_bots:
-        is_close = (
-            enemy.position in game_state.bot_diagonal_positions
-            or enemy.position in game_state.bot_adjacent_positions
-        )
-        if is_close:
-            # Both bot and enemy try to reach the target
-            if game_state.initiative:
-                # Both bot and enemy try to reach the target
-                enemy_path = _get_path(
-                    enemy.position, game_state.known_wall_positions, target, game_state
-                )
-                bot_path = _get_path(
-                    game_state.bot, game_state.known_wall_positions, target, game_state
-                )
-
-                # Ensure both paths exist and enemy has at least one move
-                if not bot_path or not enemy_path or len(enemy_path) <= 1:
-                    return bot_path if bot_path else [], float("inf")
-
-                block_move = enemy_path[1]  # Enemy's next move towards target
-                if block_move not in game_state.bot_adjacent_positions:
-                    return bot_path, len(bot_path) if bot_path else float("inf")
-
-                # Simulate bot moving to block enemy's next move
-                block_path = _get_path(
-                    block_move, game_state.known_wall_positions, target, game_state
-                )
-
-                # Only block if it brings bot closer to target
-                bot_distance = manhattan(game_state.bot, target)
-                block_distance = manhattan(block_move, target)
-
-                if block_path and block_distance < bot_distance:
-                    # Score is path length minus 2 (to prioritize shorter paths and blocking)
-                    score = len(block_path) - 2
-                    block_path.insert(0, block_move)  # Include blocking move
-                    print(
-                        "[CloseEncounter] Blocking enemy and advancing!",
-                        file=sys.stderr,
-                    )
-                    return block_path, score
-            else:
-                # Block enemy by treating their adjacent cells as walls
-                enemy_moves = {
-                    Coords(enemy.position.x + 1, enemy.position.y),
-                    Coords(enemy.position.x - 1, enemy.position.y),
-                    Coords(enemy.position.x, enemy.position.y + 1),
-                    Coords(enemy.position.x, enemy.position.y - 1),
-                }
-                bot_path = _get_path(
-                    game_state.bot,
-                    game_state.known_wall_positions.union(enemy_moves),
-                    target,
-                    game_state,
-                )
-                return bot_path, len(bot_path) - 2 if bot_path else float("inf")
-
-    return bot_path if bot_path is not None else [], score  # type: ignore
 
 
 def tsm_evaluator(game_state: GameState, move: Coords) -> tuple[list[Coords], float]:
@@ -140,43 +50,13 @@ def simple_search_evaluator(
     """Score moves by shortest path length to center (lower is better)."""
     if game_state.config is None:
         return [], float("inf")
-    path = cached_find_path(
+    path = get_pre_filled_cached_path(
         start=move,
-        goal=game_state.center,
         forbidden=game_state.known_wall_positions,
-        width=game_state.config.width,
-        height=game_state.config.height,
+        target=game_state.center,
+        game_state=game_state,
     )
     score = len(path) if path else float("inf")
-    return path if path is not None else [], score
-
-
-def cave_explore_evaluator(
-    game_state: GameState, move: Coords
-) -> tuple[list[Coords], float]:
-    """Score moves by unexplored status and path length to oldest floor."""
-    if game_state.config is None:
-        return [], float("inf")
-
-    # Bonus for moving into a hole
-    if (
-        move not in game_state.known_wall_positions
-        and move not in game_state.known_floor_positions
-    ):
-        bonus = -20
-    else:
-        # If moving to a floor, score by how long ago it was visited
-        floor = game_state.known_floors.get(move)
-        bonus = -floor.last_seen if floor else 0
-
-    path = cached_find_path(
-        start=game_state.bot,
-        goal=move,
-        forbidden=game_state.known_wall_positions,
-        width=game_state.config.width,
-        height=game_state.config.height,
-    )
-    score = (len(path) if path else float("inf")) + bonus
     return path if path is not None else [], score
 
 
@@ -207,12 +87,11 @@ def advanced_search_evaluator(
                 # Score moves that bring bot to DISTANCE_TO_ENEMY from enemy
                 enemy_dist = manhattan(move, closest_enemy.position)
                 score = abs(enemy_dist - DISTANCE_TO_ENEMY) + 2
-                path = cached_find_path(
+                path = get_pre_filled_cached_path(
                     start=game_state.bot,
-                    goal=move,
                     forbidden=game_state.known_wall_positions,
-                    width=game_state.config.width,
-                    height=game_state.config.height,
+                    target=move,
+                    game_state=game_state,
                 )
                 # Prefer moves that are not the center and bring bot closer to enemy
                 if move != center:
@@ -236,11 +115,10 @@ def advanced_search_evaluator(
             score += abs(enemy_dist - DISTANCE_TO_ENEMY) + center_dist
         else:
             score += center_dist
-    path = cached_find_path(
+    path = get_pre_filled_cached_path(
         start=game_state.bot,
-        goal=move,
         forbidden=game_state.known_wall_positions,
-        width=game_state.config.width,
-        height=game_state.config.height,
+        target=move,
+        game_state=game_state,
     )
     return path if path is not None else [], score

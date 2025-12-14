@@ -41,26 +41,39 @@ class LocalStrategy(Strategy):
 
     def decide(self, game_state: GameState) -> tuple[Coords, list[Coords]]:
         if game_state.config is None:
-            print("GameConfig must be set to decide moves", file=sys.stderr)
-            return game_state.bot, [game_state.bot]
+            raise ValueError("GameConfig must be set to decide moves")
         candidates = self.planner(game_state)
         scored_candidates = {
             target: self.evaluator(game_state, target) for target in candidates
         }
         # Filter out unreachable moves (score == inf)
-        reachable_candidates = {
+        reachable_candidates = self.filter_reachable_candidates(scored_candidates)
+        if not reachable_candidates:
+            print(
+                f"[{self.name}] No reachable candidates found. Staying in place.",
+                file=sys.stderr,
+            )
+            return game_state.bot, [game_state.bot]
+        best_candidate, best_path = self.tie_breaker(reachable_candidates)
+        if best_candidate != game_state.bot:
+            if best_path and len(best_path) > 1:
+                next_step = best_path[1]
+                return next_step, best_path
+        print(
+            f"[{self.name}] No better move found. Staying in place at {game_state.bot}.",
+            file=sys.stderr,
+        )
+        return game_state.bot, [game_state.bot]
+
+    def filter_reachable_candidates(
+        self,
+        scored_candidates: dict[Coords, tuple[list[Coords], float]],
+    ) -> dict[Coords, tuple[list[Coords], float]]:
+        return {
             target: result
             for target, result in scored_candidates.items()
             if result[1] != float("inf")
         }
-        if not reachable_candidates:
-            return game_state.bot, [game_state.bot]
-        best_candidate, best_path = self.tie_breaker(reachable_candidates)
-        if best_candidate and best_candidate != game_state.bot:
-            if best_path and len(best_path) > 1:
-                next_step = best_path[1]
-                return next_step, best_path
-        return game_state.bot, [game_state.bot]
 
 
 class GlobalGreedyStrategy(Strategy):
@@ -79,7 +92,7 @@ class GlobalGreedyStrategy(Strategy):
             return self.search_strategy
         else:
             if game_state.behaviour_state != BehaviourState.COLLECTING_GEM:
-                print(f"Switching to COLLECTING_GEM behaviour.", file=sys.stderr)
+                print("Switching to COLLECTING_GEM behaviour.", file=sys.stderr)
             game_state.behaviour_state = BehaviourState.COLLECTING_GEM
             return self.greedy_strategy
 
