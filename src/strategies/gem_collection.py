@@ -34,6 +34,9 @@ def greedy_blocking_evaluator(
         forbidden=game_state.known_wall_positions,
         game_state=game_state,
     )
+    if bot_path and len(bot_path) > 1 and bot_path[1] == target:
+        print("Next move is on the gem!", file=sys.stderr)
+        game_state.gem_caputred_tick = game_state.tick
     score = len(bot_path) if bot_path else float("inf")
 
     for enemy in game_state.visible_bots:
