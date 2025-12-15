@@ -13,7 +13,6 @@ from src.debug import HighlightCoords, highlight_coords
 from src.graph import find_articulation_points, find_bridges, find_dead_ends_and_rooms
 from src.pathfinding import cached_find_path
 from src.schemas import BehaviourState, Coords, EnemyBot, Floor, GameConfig, Gem, Wall
-from src.visibility import compute_fov
 
 
 @dataclass
@@ -297,20 +296,6 @@ class GameState:
 
         return hidden
 
-    def precompute_visibility_map(self):
-        """
-        TOO EXPENSIVE
-        Precompute visibility for all known floor tiles.
-        """
-        assert self.config is not None, (
-            "GameConfig must be set to precompute visibility map"
-        )
-        for floor in self.known_floor_positions:
-            if floor not in self.visibility_map:
-                self.visibility_map[floor] = compute_fov(
-                    self.visibility_grid, floor, self.config.vis_radius
-                )
-
     def recalculate_gem_distances(self):
         for pos, gem in list(self.known_gems.items()):
             self.known_gems[pos] = get_bot_enemy_2_gem_distances(
@@ -485,6 +470,8 @@ class GameState:
         self.update_known_floors()
         self.update_known_gems()
         self.recalculate_gem_distances()
+        self.refresh_visibility_map()
+        # self.precompute_visibility_map()
         # self.recalculate_distance_matrix()
         self.update_bot_adjacent_positions()
         self.update_bot_diagonal_adjacent_positions()
