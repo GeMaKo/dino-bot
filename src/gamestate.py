@@ -464,15 +464,13 @@ class GameState:
             self.update_hidden_positions()
             self.update_known_walls()
             self.update_floor_graph()
-        if self.behaviour_state == BehaviourState.PATROLLING:
+        else:
             self.refresh_patrol_data()
         self.refresh_visibility_map()
         self.update_known_floors()
         self.update_known_gems()
         self.recalculate_gem_distances()
         self.refresh_visibility_map()
-        # self.precompute_visibility_map()
-        # self.recalculate_distance_matrix()
         self.update_bot_adjacent_positions()
         self.update_bot_diagonal_adjacent_positions()
 
