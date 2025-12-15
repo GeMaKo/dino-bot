@@ -289,10 +289,6 @@ class GameState:
 
         # Convert the set to a list for the return value
         hidden = list(adjacent_hidden)
-        print(
-            f"[GameState] Found {len(hidden)} hidden positions adjacent to known floors.",
-            file=sys.stderr,
-        )
 
         # Update cave_revealed flag if no hidden positions remain
         if not hidden:
