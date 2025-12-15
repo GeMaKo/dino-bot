@@ -98,12 +98,8 @@ def find_dead_ends_and_rooms(graph: dict[Coords, set[Coords]]) -> set[Coords]:
     visited = set()
     dead_ends = set()
 
-    for start in graph.keys():
-        if start in visited:
-            continue
-
-        # Perform BFS/DFS to find a connected component
-        stack = [start]
+    def dfs(node):
+        stack = [node]
         component = set()
         entry_points = set()
 
@@ -123,9 +119,15 @@ def find_dead_ends_and_rooms(graph: dict[Coords, set[Coords]]) -> set[Coords]:
                     if neighbor not in component:
                         entry_points.add(neighbor)
 
-        # If the component has only one entry point, it's a dead end or room
-        if len(entry_points) <= 1:
-            # Only mark nodes with exactly one neighbor as dead ends
-            dead_ends.update(node for node in component if len(graph[node]) == 1)
+        return component, entry_points
+
+    for start in graph:
+        if start not in visited:
+            component, entry_points = dfs(start)
+
+            # If the component has only one entry point, it's a dead end or room
+            if len(entry_points) <= 1:
+                # Only mark nodes with exactly one neighbor as dead ends
+                dead_ends.update(node for node in component if len(graph[node]) == 1)
 
     return dead_ends

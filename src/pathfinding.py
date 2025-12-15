@@ -120,12 +120,17 @@ def cached_path_decorator(func):
         cache_key = (start, goal, frozenset(forbidden), width, height)
 
         if cache_key not in cache:
-            # Compute the path and store it in the cache
-            path = func(start, goal, forbidden, width, height)
-            cache[cache_key] = path
-            if len(cache) % 200 == 0:
-                print(f"[Pathfinding] Cache size: {len(cache)}", file=sys.stderr)
-
+            inverse_key = (goal, start, frozenset(forbidden), width, height)
+            if inverse_key in cache:
+                # If the inverse path is cached, reverse it for the current request
+                cached_inverse_path = cache[inverse_key]
+                cache[cache_key] = cached_inverse_path[::-1]
+            else:
+                # Compute the path and store it in the cache
+                path = func(start, goal, forbidden, width, height)
+                cache[cache_key] = path
+                if len(cache) % 200 == 0:
+                    print(f"[Pathfinding] Cache size: {len(cache)}", file=sys.stderr)
         # Return the cached path
         return cache[cache_key]
 

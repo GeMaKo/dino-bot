@@ -12,7 +12,7 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
         return []
 
     hidden = game_state.update_hidden_floors()
-    highlight_coords.append(HighlightCoords("hidden_positions", hidden, "#ff00ff"))
+    highlight_coords.append(HighlightCoords("hidden_positions", hidden, "#e2d21a97"))
     return hidden  # Return all hidden positions as candidates
 
 

@@ -36,7 +36,48 @@ def ant_colony_optimization(
     pheromone_boost: float = 1.0,
 ) -> list[Coords]:
     """
-    Solve the patrol or collection path problem using Ant Colony Optimization (ACO).
+    Solve a pathfinding problem using the Ant Colony Optimization (ACO) algorithm.
+
+    Parameters
+    ----------
+    start : Coords
+        The starting point of the path.
+    targets : set of Coords
+        The set of target points to visit.
+    walls : set of Coords
+        The set of coordinates representing obstacles in the grid.
+    width : int
+        The width of the grid.
+    height : int
+        The height of the grid.
+    distance_function : callable
+        A function that computes the shortest path between two points, considering walls and grid dimensions.
+        The function should have the signature:
+        `(start: Coords, end: Coords, walls: set[Coords], width: int, height: int) -> list[Coords]`.
+    num_ants : int, default=10
+        The number of ants to simulate in each iteration.
+    num_iterations : int, default=100
+        The number of iterations to run the ACO algorithm.
+    alpha : float, default=1.0
+        The relative importance of pheromone levels in the probability calculation.
+    beta : float, default=2.0
+        The relative importance of heuristic information (distance) in the probability calculation.
+    evaporation_rate : float, default=0.5
+        The rate at which pheromones evaporate after each iteration. Must be in the range [0, 1].
+    pheromone_boost : float, default=1.0
+        The amount of pheromone deposited by ants, inversely proportional to the cost of their path.
+
+    Returns
+    -------
+    list of Coords
+        The best path found by the algorithm, starting and ending at the `start` point. If no valid path is found,
+        returns a path containing only the `start` point.
+
+    Notes
+    -----
+    - The algorithm clusters the target points to reduce the search space.
+    - Pheromones are updated iteratively based on the quality of paths found by the ants.
+    - The algorithm assumes that the `distance_function` can handle cases where no path exists by returning `None`.
     """
     print("Starting Ant Colony Optimization...", file=sys.stderr)
     # Initialize pheromones for all edges

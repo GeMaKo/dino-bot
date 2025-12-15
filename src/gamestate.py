@@ -53,6 +53,7 @@ class GameState:
     graph_bridges: set[tuple[Coords, Coords]] = field(default_factory=set)
     visibility_grid: list[list[bool]] = field(default_factory=list)
     dead_ends: set[Coords] = field(default_factory=set)
+    aco_path: list[Coords] = field(default_factory=list)  # Initialize ACO path
 
     def __post_init__(self):
         if self.config is not None:
@@ -255,26 +256,49 @@ class GameState:
         assert self.config is not None, (
             "GameConfig must be set to find hidden positions"
         )
-        known_floor_positions = set(self.known_floors.keys())
+        width, height = self.config.width, self.config.height
+        known_floor_positions = self.known_floor_positions
 
-        def _adjacent(pos: Coords, width: int, height: int) -> list[Coords]:
-            return [
-                Coords(pos.x + dx, pos.y + dy)
-                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-                if 0 <= pos.x + dx < width and 0 <= pos.y + dy < height
-            ]
+        # Use a set for faster lookups
+        adjacent_hidden = set()
 
-        hidden = [
-            pos
-            for pos in self.hidden_positions
-            if any(
-                adj in known_floor_positions
-                for adj in _adjacent(pos, self.config.width, self.config.height)
-            )
-        ]
-        if hidden == []:
+        # Precompute valid moves to avoid recalculating them in the loop
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        # Iterate over known floor positions and calculate neighbors
+        for floor in known_floor_positions:
+            for dx, dy in directions:
+                neighbor_x, neighbor_y = floor.x + dx, floor.y + dy
+
+                # Skip invalid positions early
+                if not (0 <= neighbor_x < width and 0 <= neighbor_y < height):
+                    continue
+
+                neighbor = Coords(neighbor_x, neighbor_y)
+
+                # Skip positions that are on known floors or known walls
+                if (
+                    neighbor in self.known_floor_positions
+                    or neighbor in self.known_wall_positions
+                ):
+                    continue
+
+                # Add to adjacent_hidden if it's in hidden_positions
+                if neighbor in self.hidden_positions:
+                    adjacent_hidden.add(neighbor)
+
+        # Convert the set to a list for the return value
+        hidden = list(adjacent_hidden)
+        print(
+            f"[GameState] Found {len(hidden)} hidden positions adjacent to known floors.",
+            file=sys.stderr,
+        )
+
+        # Update cave_revealed flag if no hidden positions remain
+        if not hidden:
             self.cave_revealed = True
             print("[GameState] Cave fully revealed.", file=sys.stderr)
+
         return hidden
 
     def precompute_visibility_map(self):
@@ -452,25 +476,17 @@ class GameState:
         Refresh patrol points and paths based on the current game state.
         """
         self.update_patrol_points()
-        self.precompute_patrol_paths()
 
     def refresh(self):
         self.update_dead_ends_and_rooms()
-
-        if self.behaviour_state == BehaviourState.EXPLORING:
+        if self.cave_revealed is False:
+            self.update_hidden_positions()
             self.update_known_walls()
-            if self.cave_revealed is False:
-                self.update_hidden_positions()
             self.update_floor_graph()
-
-            # self.generate_visibility_grid()
-            # self.update_bottleneck_info()
-            # self.precompute_visibility_map()
         if self.behaviour_state == BehaviourState.PATROLLING:
             self.refresh_patrol_data()
         self.refresh_visibility_map()
         self.update_known_floors()
-        self.update_dead_ends_and_rooms()
         self.update_known_gems()
         self.recalculate_gem_distances()
         # self.recalculate_distance_matrix()
