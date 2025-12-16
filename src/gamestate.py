@@ -53,7 +53,7 @@ class GameState:
     visibility_grid: list[list[bool]] = field(default_factory=list)
     dead_ends: set[Coords] = field(default_factory=set)
     aco_path: list[Coords] = field(default_factory=list)  # Initialize ACO path
-    gem_caputred_tick: int = field(default=0)
+    gem_captured_tick: int = field(default=0)
 
     def __post_init__(self):
         if self.config is not None:
