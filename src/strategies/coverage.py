@@ -23,8 +23,6 @@ def coverage_planner(game_state: GameState) -> list[Coords]:
         default=(None, None),
     )
     best_tile = best[0]
-    best_prob = gem_prob(best[1]) if best[1] else -1.0
-
     highlight_coords.append(
         HighlightCoords(
             "coverage_best_tile",
