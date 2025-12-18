@@ -24,6 +24,7 @@ class GameState:
     initiative: bool
     visible_gems: list[Gem]
     visible_bots: list[EnemyBot]
+    config: GameConfig
     known_gems: dict[Coords, Gem] = field(default_factory=dict)
     known_walls: dict[Coords, Wall] = field(default_factory=dict)
     known_floors: dict[Coords, Floor] = field(default_factory=dict)
@@ -31,7 +32,6 @@ class GameState:
     path_segments: dict = field(default_factory=dict)
     last_gem_positions: set[Coords] = field(default_factory=set)
     last_bot_pos: Coords | None = None
-    config: GameConfig | None = field(default=None)
     current_strategy: str = field(default="")
     debug_mode: bool = field(default=True)
     recent_positions: list[Coords] = field(default_factory=list)
@@ -61,9 +61,6 @@ class GameState:
         self.highlight_sink = highlight_coords
 
     def _init_hidden_positions(self):
-        assert self.config is not None, (
-            "GameConfig must be set to initialize hidden positions"
-        )
         self.update_known_walls()
         self.update_known_floors()
         # Initialize all positions as hidden except known floors/walls
@@ -103,9 +100,6 @@ class GameState:
         """
         Generate a 2D grid representing the visibility map.
         """
-        assert self.config is not None, (
-            "GameConfig must be set to generate visibility grid"
-        )
         self.visibility_grid = [
             [False for _ in range(self.config.width)] for _ in range(self.config.height)
         ]
@@ -157,9 +151,6 @@ class GameState:
         """
         Precompute the shortest paths between all patrol points.
         """
-        assert self.config is not None, (
-            "GameConfig must be set to precompute patrol paths."
-        )
         self.path_segments = {}
         patrol_points = list(self.patrol_points)
 
@@ -180,7 +171,6 @@ class GameState:
         # )
 
     def update_known_gems(self):
-        assert self.config is not None, "GameConfig must be set to update known gems"
         # Decrease TTL for all known gems
         for pos, gem in list(self.known_gems.items()):
             self.known_gems[pos].ttl -= 1
@@ -253,9 +243,6 @@ class GameState:
 
     def update_hidden_floors(self) -> list[Coords]:
         """Return hidden positions adjacent to known floor tiles."""
-        assert self.config is not None, (
-            "GameConfig must be set to find hidden positions"
-        )
         width, height = self.config.width, self.config.height
         known_floor_positions = self.known_floor_positions
 
@@ -304,9 +291,6 @@ class GameState:
             )
 
     def recalculate_distance_matrix(self):
-        assert self.config is not None, (
-            "GameConfig must be set to update distance matrix"
-        )
         bot_pos = self.bot
         gem_positions = self.gem_positions
         # Only recalculate changed paths
