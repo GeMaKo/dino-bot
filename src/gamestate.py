@@ -1,4 +1,5 @@
 import sys
+from collections import deque
 from dataclasses import dataclass, field
 from functools import cached_property
 
@@ -32,6 +33,8 @@ class GameState:
     path_segments: dict = field(default_factory=dict)
     last_gem_positions: set[Coords] = field(default_factory=set)
     last_bot_pos: Coords | None = None
+    last_n_ticks_bot_positions: deque = field(default_factory=lambda: deque(maxlen=5))
+    last_path: list[Coords] = field(default_factory=list)
     current_strategy: str = field(default="")
     debug_mode: bool = field(default=True)
     recent_positions: list[Coords] = field(default_factory=list)
@@ -45,6 +48,7 @@ class GameState:
     patrol_points: set[Coords] = field(default_factory=set)
     patrol_index: int = field(default=0)
     behaviour_state: BehaviourState = field(default=BehaviourState.IDLE)
+    last_behaviour_state: BehaviourState = field(default=BehaviourState.IDLE)
     exploration_points_visited: list[Coords] = field(default_factory=list)
     current_patrol_path: list[Coords] | None = field(default_factory=list)
     floor_graph: dict[Coords, set[Coords]] = field(default_factory=dict)
@@ -54,6 +58,7 @@ class GameState:
     dead_ends: set[Coords] = field(default_factory=set)
     aco_path: list[Coords] = field(default_factory=list)  # Initialize ACO path
     gem_captured_tick: int = field(default=0)
+    stuck_counter: int = field(default=0)
 
     def __post_init__(self):
         if self.config is not None:
@@ -95,6 +100,24 @@ class GameState:
     @property
     def gem_positions(self) -> set[Coords]:
         return set(self.known_gems.keys())
+
+    def check_and_increment_stuck(self):
+        if self.last_behaviour_state != self.behaviour_state:
+            self.stuck_counter = 0
+            self.last_n_ticks_bot_positions.clear()
+            self.last_path = []
+        if (
+            len(self.last_n_ticks_bot_positions)
+            == self.last_n_ticks_bot_positions.maxlen
+        ):
+            unique_positions = set(self.last_n_ticks_bot_positions)
+            # If all positions are the same (staying), or only 2 positions (oscillating)
+            if len(unique_positions) <= 3:
+                self.stuck_counter += 1
+            else:
+                self.stuck_counter = 0
+        else:
+            self.stuck_counter = 0
 
     def generate_visibility_grid(self):
         """
@@ -444,9 +467,10 @@ class GameState:
         self.update_patrol_points()
 
     def refresh(self):
+        self.check_and_increment_stuck()
         self.update_known_floors()
         if self.cave_revealed is False:
-            self.update_dead_ends_and_rooms()
+            # self.update_dead_ends_and_rooms()
             self.update_hidden_positions()
             self.update_known_walls()
             self.update_floor_graph()
@@ -460,6 +484,8 @@ class GameState:
         self.update_bot_adjacent_positions()
         self.update_bot_diagonal_adjacent_positions()
         self.last_bot_pos = self.bot
+        self.last_n_ticks_bot_positions.append(self.bot)
+        self.last_behaviour_state = self.behaviour_state
 
 
 def get_pre_filled_cached_path(

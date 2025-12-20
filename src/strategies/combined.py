@@ -54,5 +54,16 @@ class GlobalCombinedStrategy(Strategy):
             print(
                 f"[{self.name}] Switching strategy to: {strategy.name}", file=sys.stderr
             )
+        if game_state.stuck_counter >= 3:
+            print(
+                f"[{self.name}] Bot seems stuck (stuck_counter={game_state.stuck_counter}). sticking to previous target {game_state.last_path[-1]}.",
+                file=sys.stderr,
+            )
+            next_path = game_state.last_path
+
+            next_pos = game_state.last_path[
+                game_state.last_path.index(game_state.bot) + 1
+            ]
+            return next_pos, next_path
         game_state.current_strategy = strategy.name
         return strategy.decide(game_state)

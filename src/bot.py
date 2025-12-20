@@ -79,6 +79,7 @@ class CollectorBot:
         # Use pathfinding to determine next move
         # Update recent positions (keep last N, from config)
         self.game_state.update_recent_positions(RECENT_POSITIONS_LIMIT)
+        self.game_state.last_path = next_path
 
         # Map position delta to direction
         dx = next_pos.x - self.game_state.bot.x
