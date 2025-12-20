@@ -14,8 +14,8 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
 
     hidden = game_state.update_hidden_floors()
     highlight_coords.append(HighlightCoords("hidden_positions", hidden, "#e2d21a97"))
-    top1 = sorted(hidden, key=lambda pos: manhattan(game_state.bot, pos))[:1]
-    return top1
+    top3 = sorted(hidden, key=lambda pos: manhattan(game_state.bot, pos))[:3]
+    return top3
 
 
 def cave_explore_evaluator(
@@ -39,5 +39,8 @@ def cave_explore_evaluator(
         forbidden=game_state.known_wall_positions,
         game_state=game_state,
     )
-    score = (len(path) if path else float("inf")) + bonus
+    penalty = 0
+    if game_state.last_bot_pos in path:
+        penalty = 10
+    score = (len(path) if path else float("inf")) + bonus + penalty
     return path if path else [], score

@@ -459,6 +459,7 @@ class GameState:
         self.refresh_visibility_map()
         self.update_bot_adjacent_positions()
         self.update_bot_diagonal_adjacent_positions()
+        self.last_bot_pos = self.bot
 
 
 def get_pre_filled_cached_path(
