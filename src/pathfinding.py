@@ -133,6 +133,9 @@ def cached_path_decorator(func):
                     ):
                         idx = path.index(start)
                         cache[cache_key] = path[idx:]
+                        print(
+                            "[Pathfinding] Cache hit by partial path", file=sys.stderr
+                        )
                         break
                 else:
                     path = func(start, goal, forbidden, width, height)
