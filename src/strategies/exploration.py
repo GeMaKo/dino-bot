@@ -8,13 +8,10 @@ from src.schemas import Coords
 
 def cave_explore_planner(game_state: GameState) -> list[Coords]:
     """Plan moves to all hidden positions."""
-    if game_state.config is None:
-        print("GameConfig must be set to plan moves", file=sys.stderr)
-        return []
-
     hidden = game_state.update_hidden_floors()
     highlight_coords.append(HighlightCoords("hidden_positions", hidden, "#e2d21a97"))
     top3 = sorted(hidden, key=lambda pos: manhattan(game_state.bot, pos))[:3]
+    highlight_coords.append(HighlightCoords("cave_explore_top3", top3, "#b82d8a"))
     return top3
 
 
@@ -22,17 +19,11 @@ def cave_explore_evaluator(
     game_state: GameState, move: Coords
 ) -> tuple[list[Coords], float]:
     """Score moves by unexplored status and path length to oldest floor."""
-    if game_state.config is None:
-        return [], float("inf")
-
-    # Bonus for moving into a hole
-    bonus = (
-        -20
-        if move not in game_state.known_wall_positions
-        and move not in game_state.known_floor_positions
-        else 0
-    )
-
+    if len(game_state.last_path) > 0 and game_state.last_path[-1] == move:
+        print("Continuing on last path", file=sys.stderr)
+        path = game_state.last_path[game_state.last_path.index(game_state.bot) :]
+        score = 0
+        return path, score
     path = get_pre_filled_cached_path(
         start=game_state.bot,
         target=move,
@@ -42,5 +33,5 @@ def cave_explore_evaluator(
     penalty = 0
     if game_state.last_bot_pos in path:
         penalty = 10
-    score = (len(path) if path else float("inf")) + bonus + penalty
+    score = (len(path) if path else float("inf")) + penalty
     return path if path else [], score
