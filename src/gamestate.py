@@ -467,22 +467,21 @@ class GameState:
         self.update_patrol_points()
 
     def refresh(self):
+        self.refresh_visibility_map()
+        self.update_bot_adjacent_positions()
+        self.update_bot_diagonal_adjacent_positions()
         self.check_and_increment_stuck()
         self.update_known_floors()
         if self.cave_revealed is False:
             # self.update_dead_ends_and_rooms()
             self.update_hidden_positions()
             self.update_known_walls()
-            self.update_floor_graph()
+            # self.update_floor_graph()
 
         # else:
         # self.refresh_patrol_data()
-        self.refresh_visibility_map()
         self.update_known_gems()
         self.recalculate_gem_distances()
-        self.refresh_visibility_map()
-        self.update_bot_adjacent_positions()
-        self.update_bot_diagonal_adjacent_positions()
         self.last_bot_pos = self.bot
         self.last_n_ticks_bot_positions.append(self.bot)
         self.last_behaviour_state = self.behaviour_state

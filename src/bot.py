@@ -71,7 +71,6 @@ class CollectorBot:
         if self.game_state is None or self.game_state.config is None:
             raise RuntimeError("Bot not initialized. Call initialize() first.")
         assert self.game_state is not None
-        assert self.game_state.config is not None
 
         # Use the strategy to decide the next position
         next_pos, next_path = self.strategy.decide(self.game_state)

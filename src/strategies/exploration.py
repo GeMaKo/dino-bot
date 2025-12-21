@@ -1,5 +1,3 @@
-import sys
-
 from src.debug import HighlightCoords, highlight_coords
 from src.gamestate import GameState, get_pre_filled_cached_path
 from src.pathfinding import manhattan
@@ -10,20 +8,18 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
     """Plan moves to all hidden positions."""
     hidden = game_state.update_hidden_floors()
     highlight_coords.append(HighlightCoords("hidden_positions", hidden, "#e2d21a97"))
-    top3 = sorted(hidden, key=lambda pos: manhattan(game_state.bot, pos))[:3]
-    highlight_coords.append(HighlightCoords("cave_explore_top3", top3, "#b82d8a"))
-    return top3
+    if len(game_state.last_path) > 0 and game_state.last_path[-1] in hidden:
+        candidates = [game_state.last_path[-1]]  # Continue to last target
+    else:
+        candidates = sorted(hidden, key=lambda pos: manhattan(game_state.bot, pos))[:3]
+    highlight_coords.append(HighlightCoords("cave_explore_top3", candidates, "#b82d8a"))
+    return candidates
 
 
 def cave_explore_evaluator(
     game_state: GameState, move: Coords
 ) -> tuple[list[Coords], float]:
-    """Score moves by unexplored status and path length to oldest floor."""
-    if len(game_state.last_path) > 0 and game_state.last_path[-1] == move:
-        print("Continuing on last path", file=sys.stderr)
-        path = game_state.last_path[game_state.last_path.index(game_state.bot) :]
-        score = 0
-        return path, score
+    """Evaluate moves towards hidden positions."""
     path = get_pre_filled_cached_path(
         start=game_state.bot,
         target=move,
