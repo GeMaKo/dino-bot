@@ -1,5 +1,4 @@
 from src.config import (
-    DISTANCE_PENALTY_WEIGHT,
     PROBABILITY_WEIGHT,
     RECENCY_PENALTY_WEIGHT,
 )
@@ -22,19 +21,14 @@ def coverage_planner(game_state: GameState) -> list[Coords]:
         ticks_unseen = ticks_since_capture - ticks_after_capture
         prob = 1 - (1 - gem_spawn_rate) ** ticks_unseen if ticks_unseen > 0 else 0
         recency_penalty = 1 / (1 + ticks_after_capture)
-        bot_pos = game_state.bot
-        dist = abs(bot_pos.x - floor_info.position.x) + abs(
-            bot_pos.y - floor_info.position.y
-        )
-        distance_penalty = 1 / (1 + dist)
+        # bot_pos = game_state.bot
+        # dist = manhattan(bot_pos, floor_info.position)
+        # distance_penalty = 1 / (1 + dist)
         # Combine scores with weights from config
         return (
-            prob
-            * PROBABILITY_WEIGHT
-            * recency_penalty
-            * RECENCY_PENALTY_WEIGHT
-            * distance_penalty
-            * DISTANCE_PENALTY_WEIGHT
+            prob * PROBABILITY_WEIGHT * recency_penalty * RECENCY_PENALTY_WEIGHT
+            # * distance_penalty
+            # * DISTANCE_PENALTY_WEIGHT
         )
 
     best = max(
