@@ -63,7 +63,14 @@ class GlobalCombinedStrategy(Strategy):
             if next_path is None or len(next_path) == 1:
                 next_path = [game_state.bot]
 
-            next_pos = next_path[next_path.index(game_state.bot) + 1]
+            try:
+                bot_index = next_path.index(game_state.bot)
+                if bot_index + 1 < len(next_path):
+                    next_pos = next_path[bot_index + 1]
+                else:
+                    next_pos = game_state.bot
+            except ValueError:
+                next_pos = game_state.bot
             return next_pos, next_path
         elif game_state.stuck_counter >= 10:
             print(
