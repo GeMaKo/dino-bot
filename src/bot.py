@@ -1,5 +1,4 @@
 import json
-import random
 import sys
 from typing import Optional
 
@@ -15,9 +14,6 @@ from src.schemas import (
     Phase,
 )
 from src.strategy_register import STRATEGY_REGISTRY
-
-SEED = 42
-random.seed(SEED)
 
 
 class CollectorBot:

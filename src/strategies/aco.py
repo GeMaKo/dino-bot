@@ -1,3 +1,4 @@
+import src.random_seed  # noqa: F401  # Sets global random seed as a side effect # isort: skip
 import random
 import sys
 from typing import Callable
