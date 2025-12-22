@@ -60,10 +60,10 @@ class GlobalCombinedStrategy(Strategy):
                 file=sys.stderr,
             )
             next_path = game_state.last_path
+            if next_path is None:
+                next_path = [game_state.bot]
 
-            next_pos = game_state.last_path[
-                game_state.last_path.index(game_state.bot) + 1
-            ]
+            next_pos = next_path[next_path.index(game_state.bot) + 1]
             return next_pos, next_path
         elif game_state.stuck_counter >= 10:
             print(
