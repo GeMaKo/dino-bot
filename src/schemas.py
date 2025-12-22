@@ -21,6 +21,7 @@ class BehaviourState(Enum):
     EXPLORING = 1
     PATROLLING = 2
     COLLECTING_GEM = 3
+    UNSTUCKING = 4
 
 
 @dataclass(frozen=True)

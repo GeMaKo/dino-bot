@@ -1,3 +1,4 @@
+import random
 import sys
 from collections import deque
 from dataclasses import dataclass, field
@@ -38,6 +39,7 @@ class GameState:
     current_strategy: str = field(default="")
     debug_mode: bool = field(default=True)
     recent_positions: list[Coords] = field(default_factory=list)
+    bot_very_stuck: bool = field(default=False)
     bot_adjacent_positions: set[Coords] = field(default_factory=set)
     bot_diagonal_positions: set[Coords] = field(default_factory=set)
     hidden_positions: set[Coords] = field(default_factory=set)
@@ -496,9 +498,26 @@ def get_pre_filled_cached_path(
     """
     Wrapper function to get a pre-filled cached path using the game state.
     """
-    assert game_state.config is not None, (
-        "GameConfig must be set to get pre-filled cached path"
-    )
+    if game_state.bot_very_stuck:
+        # When the bot is very stuck, move away from the nearest enemy
+        adjacents = list(get_adjacents(start))
+        enemy_positions = {bot.position for bot in game_state.visible_bots}
+        allowed_moves = [
+            pos
+            for pos in adjacents
+            if pos not in forbidden and pos not in enemy_positions
+        ]
+        if allowed_moves:
+            target = random.choice(allowed_moves)
+        else:
+            target = start  # No move possible, stay in place
+        return cached_find_path(
+            start=start,
+            goal=target,
+            forbidden=forbidden,
+            width=game_state.config.width,
+            height=game_state.config.height,
+        )
     return cached_find_path(
         start=start,
         goal=target,
