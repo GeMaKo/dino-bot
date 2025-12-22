@@ -60,7 +60,7 @@ class GlobalCombinedStrategy(Strategy):
                 file=sys.stderr,
             )
             next_path = game_state.last_path
-            if next_path is None:
+            if next_path is None or len(next_path) == 1:
                 next_path = [game_state.bot]
 
             next_pos = next_path[next_path.index(game_state.bot) + 1]
