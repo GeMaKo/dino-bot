@@ -1,3 +1,4 @@
+import heapq
 import sys
 from collections import deque
 from typing import Callable
@@ -25,6 +26,45 @@ def cluster_targets(targets, max_distance):
 
 def manhattan(a: Coords, b: Coords) -> int:
     return abs(a.x - b.x) + abs(a.y - b.y)
+
+
+def astar(
+    start: Coords,
+    goal: Coords,
+    forbidden: set[Coords],
+    width: int,
+    height: int,
+    directions: list[Direction] | None = None,
+) -> list[Coords]:
+    if directions is None:
+        directions = [d for d in Direction if d != Direction.WAIT]
+
+    open_set = []
+    heapq.heappush(open_set, (0, start, [start]))
+    g_score = {start: 0}
+    visited = set()
+
+    while open_set:
+        _, current, path = heapq.heappop(open_set)
+        if current == goal:
+            return path
+        visited.add(current)
+
+        for direction in directions:
+            ddx, ddy = direction.value.x, direction.value.y
+            neighbor = Coords(current.x + ddx, current.y + ddy)
+            if (
+                0 <= neighbor.x < width
+                and 0 <= neighbor.y < height
+                and neighbor not in forbidden
+                and neighbor not in visited
+            ):
+                tentative_g = g_score[current] + 1
+                if tentative_g < g_score.get(neighbor, float("inf")):
+                    g_score[neighbor] = tentative_g
+                    f_score = tentative_g + manhattan(neighbor, goal)
+                    heapq.heappush(open_set, (f_score, neighbor, path + [neighbor]))
+    return []
 
 
 def bfs(
@@ -88,28 +128,21 @@ def find_path(
     forbidden: set[Coords],
     width: int,
     height: int,
+    algorithm: str = "astar",
 ) -> list[Coords]:
-    path_tuples = bfs(
-        start,
-        is_goal=lambda pos, path: pos == goal,
-        forbidden=forbidden,
-        width=width,
-        height=height,
-        goal=goal,  # Pass goal for axis prioritization
-    )
-    # If the path is empty, check if reversing start and goal yields a valid path
-    if not path_tuples:
-        reverse_path = bfs(
-            goal,
-            is_goal=lambda pos, path: pos == start,
+    if algorithm == "astar":
+        return astar(start, goal, forbidden, width, height)
+    elif algorithm == "bfs":
+        return bfs(
+            start,
+            is_goal=lambda pos, path: pos == goal,
             forbidden=forbidden,
             width=width,
             height=height,
-            goal=start,
+            goal=goal,  # Pass goal for axis prioritization
         )
-        return reverse_path[::-1]  # Reverse the path to match the original direction
-
-    return path_tuples
+    else:
+        raise ValueError(f"Unknown pathfinding algorithm: {algorithm}")
 
 
 def cached_path_decorator(func):

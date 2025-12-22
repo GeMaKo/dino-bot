@@ -159,9 +159,10 @@ STRATEGY_REGISTRY: dict[str, Strategy] = {
         create_advanced_search_strategy(),
         name="TSMCollectionStrategy",
     ),
-    "cave_explore_greedy": GlobalGreedyStrategy(
-        create_greedy_blocking_strategy(),
-        create_cave_explore_strategy(),
+    "cave_explore_greedy": GlobalCombinedStrategy(
+        exploration_strategy=create_exploration_strategy(),
+        patrol_strategy=create_oldest_floor_patrol_strategy(),
+        gem_collection_strategy=create_gem_collection_strategy(),
         name="CaveExploreGreedyStrategy",
     ),
     "combined": GlobalCombinedStrategy(
