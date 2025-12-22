@@ -16,6 +16,9 @@ from src.schemas import (
 )
 from src.strategy_register import STRATEGY_REGISTRY
 
+SEED = 42
+random.seed(SEED)
+
 
 class CollectorBot:
     """
@@ -110,7 +113,6 @@ class CollectorBot:
             data = json.loads(line)
             if first_tick:
                 config = GameConfig.from_dict(data.get("config"))
-                random.seed(config.bot_seed)
                 data.pop("config", None)
                 print(
                     f"{self.name} (Python) launching on a {config.width}x{config.height} map",
