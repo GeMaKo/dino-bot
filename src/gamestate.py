@@ -268,46 +268,25 @@ class GameState:
         )
 
     def update_hidden_floors(self) -> list[Coords]:
-        """Return hidden positions adjacent to known floor tiles."""
         width, height = self.config.width, self.config.height
-        known_floor_positions = self.known_floor_positions
-
-        # Use a set for faster lookups
-        adjacent_hidden = set()
-
-        # Precompute valid moves to avoid recalculating them in the loop
+        known_floors = self.known_floor_positions
+        hidden_positions = self.hidden_positions
         directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
-        # Iterate over known floor positions and calculate neighbors
-        for floor in known_floor_positions:
-            for dx, dy in directions:
-                neighbor_x, neighbor_y = floor.x + dx, floor.y + dy
-
-                # Skip invalid positions early
-                if not (0 <= neighbor_x < width and 0 <= neighbor_y < height):
-                    continue
-
-                neighbor = Coords(neighbor_x, neighbor_y)
-
-                # Skip positions that are on known floors or known walls
-                if (
-                    neighbor in self.known_floor_positions
-                    or neighbor in self.known_wall_positions
-                ):
-                    continue
-
-                # Add to adjacent_hidden if it's in hidden_positions
-                if neighbor in self.hidden_positions:
-                    adjacent_hidden.add(neighbor)
-
-        # Convert the set to a list for the return value
-        hidden = list(adjacent_hidden)
-
-        # Update cave_revealed flag if no hidden positions remain
+        # Generate all possible adjacent positions and filter in one pass
+        hidden = [
+            Coords(floor.x + dx, floor.y + dy)
+            for floor in known_floors
+            for dx, dy in directions
+            if (
+                0 <= floor.x + dx < width
+                and 0 <= floor.y + dy < height
+                and Coords(floor.x + dx, floor.y + dy) in hidden_positions
+            )
+        ]
         if not hidden:
             self.cave_revealed = True
             print("[GameState] Cave fully revealed.", file=sys.stderr)
-
         return hidden
 
     def recalculate_gem_distances(self):
