@@ -17,7 +17,7 @@ def cave_explore_planner(game_state: GameState) -> list[Coords]:
             file=sys.stderr,
         )
     else:
-        candidates = sorted(hidden, key=lambda pos: manhattan(game_state.bot, pos))[:1]
+        candidates = sorted(hidden, key=lambda pos: manhattan(game_state.bot, pos))[:3]
     highlight_coords.append(HighlightCoords("cave_explore_top3", candidates, "#b82d8a"))
     return candidates
 

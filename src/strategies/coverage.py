@@ -11,25 +11,15 @@ def coverage_planner(game_state: GameState) -> list[Coords]:
     """
     Selects the floor tile with the highest probability of a gem spawn since the last capture.
     """
-    current_tick = game_state.tick
     gem_spawn_rate = game_state.config.gem_spawn_rate
-    gem_captured_tick = game_state.gem_captured_tick
-    ticks_since_capture = current_tick - gem_captured_tick
 
     def gem_score(floor_info: Floor):
-        ticks_after_capture = max(floor_info.last_seen - gem_captured_tick, 0)
-        ticks_unseen = ticks_since_capture - ticks_after_capture
+        # Time since this tile was last seen
+        ticks_unseen = game_state.tick - floor_info.last_seen
+        # Probability at least one gem has spawned since last seen
         prob = 1 - (1 - gem_spawn_rate) ** ticks_unseen if ticks_unseen > 0 else 0
-        recency_penalty = 1 / (1 + ticks_after_capture)
-        # bot_pos = game_state.bot
-        # dist = manhattan(bot_pos, floor_info.position)
-        # distance_penalty = 1 / (1 + dist)
-        # Combine scores with weights from config
-        return (
-            prob * PROBABILITY_WEIGHT * recency_penalty * RECENCY_PENALTY_WEIGHT
-            # * distance_penalty
-            # * DISTANCE_PENALTY_WEIGHT
-        )
+        recency_penalty = 1 / (1 + ticks_unseen)
+        return prob * PROBABILITY_WEIGHT * recency_penalty * RECENCY_PENALTY_WEIGHT
 
     best = max(
         game_state.known_floors.items(),
