@@ -1,7 +1,7 @@
 import pytest
 
 from src.gamestate import GameState
-from src.schemas import Coords, EnemyBot, Floor, GameConfig
+from src.schemas import Coords, EnemyBot, Floor, GameConfig, ViewPoint
 from src.strategies.patrol import last_seen_sum_patrol_point_evaluator
 
 
@@ -49,9 +49,13 @@ def setup_gamestate():
     }
     # gs.known_wall_positions = set()  # Ensure this is present for pathfinding
     gs.visibility_map = {
-        Coords(1, 2): {Coords(1, 2), Coords(2, 2)},
-        Coords(3, 3): {Coords(3, 3)},
-        Coords(2, 2): {Coords(2, 2), Coords(3, 3)},
+        Coords(1, 2): ViewPoint(
+            position=Coords(1, 2), visible_tiles={Coords(1, 2), Coords(2, 2)}
+        ),
+        Coords(3, 3): ViewPoint(position=Coords(3, 3), visible_tiles={Coords(3, 3)}),
+        Coords(2, 2): ViewPoint(
+            position=Coords(2, 2), visible_tiles={Coords(2, 2), Coords(3, 3)}
+        ),
     }
     return gs
 
@@ -104,7 +108,7 @@ def test_last_seen_sum_patrol_point_evaluator_high_tick(setup_gamestate):
 
 def test_last_seen_sum_patrol_point_evaluator_missing_visibility(setup_gamestate):
     move = Coords(2, 2)
-    setup_gamestate.visibility_map[move] = set()
+    setup_gamestate.visibility_map[move] = ViewPoint(position=move, visible_tiles=set())
     path, score = last_seen_sum_patrol_point_evaluator(setup_gamestate, move)
     assert isinstance(path, list)
     assert isinstance(score, float)
@@ -116,7 +120,9 @@ def test_last_seen_sum_patrol_point_evaluator_missing_visibility(setup_gamestate
 
 def test_last_seen_sum_patrol_point_evaluator_missing_known_floor(setup_gamestate):
     move = Coords(4, 4)
-    setup_gamestate.visibility_map[move] = {Coords(4, 4)}
+    setup_gamestate.visibility_map[move] = ViewPoint(
+        position=move, visible_tiles={Coords(4, 4)}
+    )
     setup_gamestate.known_floors[Coords(4, 4)] = Floor(
         position=Coords(4, 4), last_seen=0
     )
@@ -131,7 +137,7 @@ def test_last_seen_sum_patrol_point_evaluator_missing_known_floor(setup_gamestat
 
 def test_last_seen_sum_patrol_point_evaluator_empty_visibility_map(setup_gamestate):
     move = Coords(5, 5)
-    setup_gamestate.visibility_map[move] = set()
+    setup_gamestate.visibility_map[move] = ViewPoint(position=move, visible_tiles=set())
     setup_gamestate.known_floors[Coords(5, 5)] = Floor(
         position=Coords(5, 5), last_seen=0
     )

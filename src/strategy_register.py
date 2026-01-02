@@ -13,7 +13,6 @@ from src.strategies.patrol import (
     oldest_floor_patrol_planner,
     patrol_evaluator,
     simple_patrol_point_planner,
-    simple_patrol_route_planner,
 )
 from src.strategies.planners import (
     advanced_search_planner,
@@ -34,17 +33,6 @@ def create_exploration_strategy() -> LocalStrategy:
         name="ExplorationStrategy",
         evaluator=cave_explore_evaluator,
         planner=cave_explore_planner,
-        tie_breaker=simple_tie_breaker,
-    )
-
-
-# Patrol strategy
-def create_simple_patrol_route_strategy() -> LocalStrategy:
-    """Create and return a patrol strategy instance."""
-    return LocalStrategy(
-        name="SimplePatrolRouteStrategy",
-        evaluator=patrol_evaluator,
-        planner=simple_patrol_route_planner,
         tie_breaker=simple_tie_breaker,
     )
 

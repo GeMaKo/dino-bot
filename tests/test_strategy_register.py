@@ -3,7 +3,6 @@ from src.schemas import Coords
 from src.strategy_register import (
     create_exploration_strategy,
     create_gem_collection_strategy,
-    create_simple_patrol_route_strategy,
 )
 
 
@@ -52,14 +51,6 @@ def test_exploration_strategy_execution():
     gamestate = create_realistic_gamestate()
     gamestate.refresh()
     strategy = create_exploration_strategy()
-    decision = strategy.decide(gamestate)
-    assert decision is not None, "Decision for exploration strategy failed"
-
-
-def test_patrol_strategy_execution():
-    gamestate = create_realistic_gamestate()
-    gamestate.refresh()
-    strategy = create_simple_patrol_route_strategy()
     decision = strategy.decide(gamestate)
     assert decision is not None, "Decision for exploration strategy failed"
 

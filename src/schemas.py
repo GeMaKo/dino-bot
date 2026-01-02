@@ -111,3 +111,11 @@ class Wall:
 class Floor:
     position: Coords
     last_seen: int
+    gems_captured: int = 0
+
+
+@dataclass
+class ViewPoint:
+    position: Coords
+    visible_tiles: set[Coords] = field(default_factory=set)
+    gems_captured: int = 0

@@ -2,7 +2,7 @@ import itertools
 from functools import lru_cache
 
 from src.pathfinding import cached_find_path, manhattan
-from src.schemas import Coords, EnemyBot, Gem, Wall
+from src.schemas import Coords, EnemyBot, Gem, ViewPoint, Wall
 
 
 def get_bot2gems_distances(
@@ -91,7 +91,7 @@ def get_distances(
 
 def find_viewpoints(
     graph: dict[Coords, set[Coords]],
-    visibility_map: dict[Coords, set[Coords]],
+    visibility_map: dict[Coords, ViewPoint],
     dead_ends: set[Coords],
 ) -> set[Coords]:
     """
@@ -110,7 +110,7 @@ def find_viewpoints(
         visible_viewpoints = {
             vp
             for vp in visibility_map.keys()
-            if dead_end in visibility_map.get(vp, set())
+            if dead_end in visibility_map.get(vp, ViewPoint(position=vp)).visible_tiles
         }
 
         if visible_viewpoints:
@@ -118,7 +118,9 @@ def find_viewpoints(
             best_viewpoint = max(
                 visible_viewpoints,
                 key=lambda vp: (
-                    len(visibility_map.get(vp, set())),  # Total visibility
+                    len(
+                        visibility_map.get(vp, ViewPoint(position=vp)).visible_tiles
+                    ),  # Total visibility
                     manhattan(dead_end, vp),  # Distance from the dead end
                 ),
             )

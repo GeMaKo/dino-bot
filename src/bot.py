@@ -139,7 +139,6 @@ class CollectorBot:
                 ]
             }
             highlight_coords.clear()
-            self.game_state.exploration_points_visited.append(self.game_state.bot)
             print(
                 f"{move} {json.dumps(highlight)}",
                 flush=True,

@@ -15,7 +15,16 @@ from src.bot_logic import (
 from src.debug import HighlightCoords, highlight_coords
 from src.graph import find_articulation_points, find_bridges, find_dead_ends_and_rooms
 from src.pathfinding import cached_find_path
-from src.schemas import BehaviourState, Coords, EnemyBot, Floor, GameConfig, Gem, Wall
+from src.schemas import (
+    BehaviourState,
+    Coords,
+    EnemyBot,
+    Floor,
+    GameConfig,
+    Gem,
+    ViewPoint,
+    Wall,
+)
 
 
 @dataclass
@@ -46,22 +55,17 @@ class GameState:
     bot_diagonal_positions: set[Coords] = field(default_factory=set)
     hidden_positions: set[Coords] = field(default_factory=set)
     cave_revealed: bool = field(default=False)
-    explore_target: Coords | None = field(default=None)
-    visibility_map: dict[Coords, set[Coords]] = field(default_factory=dict)
+    visibility_map: dict[Coords, ViewPoint] = field(default_factory=dict)
     highlight_sink: list[HighlightCoords] | None = None
     patrol_points: set[Coords] = field(default_factory=set)
-    patrol_index: int = field(default=0)
     behaviour_state: BehaviourState = field(default=BehaviourState.IDLE)
     last_behaviour_state: BehaviourState = field(default=BehaviourState.IDLE)
-    exploration_points_visited: list[Coords] = field(default_factory=list)
-    current_patrol_path: list[Coords] | None = field(default_factory=list)
     floor_graph: dict[Coords, set[Coords]] = field(default_factory=dict)
     last_floor_graph: dict[Coords, set[Coords]] = field(default_factory=dict)
     graph_articulation_points: set[Coords] = field(default_factory=set)
     graph_bridges: set[tuple[Coords, Coords]] = field(default_factory=set)
     visibility_grid: list[list[bool]] = field(default_factory=list)
     dead_ends: set[Coords] = field(default_factory=set)
-    aco_path: list[Coords] = field(default_factory=list)  # Initialize ACO path
     gem_captured_tick: int = field(default=0)
     stuck_counter: int = field(default=0)
 
@@ -135,7 +139,9 @@ class GameState:
             self.visibility_grid[wall.y][wall.x] = True
 
     def refresh_visibility_map(self):
-        self.visibility_map[self.bot] = {f.position for f in self.floor}
+        self.visibility_map[self.bot] = ViewPoint(
+            position=self.bot, visible_tiles={f.position for f in self.floor}
+        )
 
     def update_patrol_points(self):
         """
@@ -148,20 +154,23 @@ class GameState:
         # Step 2: Ensure all known floors are covered without overriding dead end-focused points
         uncovered_floors = self.known_floor_positions.copy()
         for vp in best_viewpoints:
-            uncovered_floors -= self.visibility_map.get(vp, set())
+            uncovered_floors -= self.visibility_map.get(
+                vp, ViewPoint(position=vp)
+            ).visible_tiles
 
         while uncovered_floors:
             # Find the viewpoint that covers the most uncovered floors, but avoid overriding dead end-focused points
             best_additional_viewpoint = max(
                 self.visibility_map.keys() - best_viewpoints,
                 key=lambda vp: len(
-                    self.visibility_map.get(vp, set()) & uncovered_floors
+                    self.visibility_map.get(vp, ViewPoint(position=vp)).visible_tiles
+                    & uncovered_floors
                 ),
             )
             best_viewpoints.add(best_additional_viewpoint)
             uncovered_floors -= self.visibility_map.get(
-                best_additional_viewpoint, set()
-            )
+                best_additional_viewpoint, ViewPoint(position=best_additional_viewpoint)
+            ).visible_tiles
 
         # Update patrol points and highlight them
         self.patrol_points = best_viewpoints
