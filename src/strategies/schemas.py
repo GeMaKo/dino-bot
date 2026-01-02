@@ -2,6 +2,7 @@ import sys
 from abc import ABC, abstractmethod
 from typing import Callable
 
+from src.debug import HighlightCoords, highlight_coords
 from src.gamestate import GameState
 from src.schemas import BehaviourState, Coords
 
@@ -40,8 +41,6 @@ class LocalStrategy(Strategy):
         self.tie_breaker = tie_breaker
 
     def decide(self, game_state: GameState) -> tuple[Coords, list[Coords]]:
-        if game_state.config is None:
-            raise ValueError("GameConfig must be set to decide moves")
         candidates = self.planner(game_state)
         scored_candidates = {
             target: self.evaluator(game_state, target) for target in candidates
@@ -55,6 +54,17 @@ class LocalStrategy(Strategy):
             )
             return game_state.bot, [game_state.bot]
         best_candidate, best_path = self.tie_breaker(reachable_candidates)
+        if best_candidate in game_state.visibility_map and False:
+            highlight_coords.append(
+                HighlightCoords(
+                    "visibility",
+                    [
+                        Coords(pos.x, pos.y)
+                        for pos in game_state.visibility_map[best_candidate]
+                    ],
+                    "#00ffff",
+                )
+            )
         if best_candidate != game_state.bot:
             if best_path and len(best_path) > 1:
                 next_step = best_path[1]

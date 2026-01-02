@@ -1,5 +1,5 @@
 from src.strategies.combined import GlobalCombinedStrategy
-from src.strategies.coverage import coverage_planner
+from src.strategies.coverage import coverage_evaluator, coverage_planner
 from src.strategies.evaluators import (
     advanced_search_evaluator,
     greedy_evaluator,
@@ -9,8 +9,10 @@ from src.strategies.evaluators import (
 from src.strategies.exploration import cave_explore_evaluator, cave_explore_planner
 from src.strategies.gem_collection import greedy_blocking_evaluator, greedy_planner
 from src.strategies.patrol import (
+    last_seen_sum_patrol_point_evaluator,
     oldest_floor_patrol_planner,
     patrol_evaluator,
+    simple_patrol_point_planner,
     simple_patrol_route_planner,
 )
 from src.strategies.planners import (
@@ -61,8 +63,18 @@ def create_coverage_patrol_strategy() -> LocalStrategy:
     """Create and return a coverage patrol strategy instance."""
     return LocalStrategy(
         name="CoveragePatrolStrategy",
-        evaluator=patrol_evaluator,
+        evaluator=coverage_evaluator,
         planner=coverage_planner,
+        tie_breaker=simple_tie_breaker,
+    )
+
+
+def create_last_seen_sum_patrol_strategy() -> LocalStrategy:
+    """Create and return a last seen sum patrol strategy instance."""
+    return LocalStrategy(
+        name="LastSeenSumPatrolStrategy",
+        evaluator=last_seen_sum_patrol_point_evaluator,
+        planner=simple_patrol_point_planner,
         tie_breaker=simple_tie_breaker,
     )
 
@@ -167,7 +179,7 @@ STRATEGY_REGISTRY: dict[str, Strategy] = {
     ),
     "combined": GlobalCombinedStrategy(
         exploration_strategy=create_exploration_strategy(),
-        patrol_strategy=create_coverage_patrol_strategy(),
+        patrol_strategy=create_last_seen_sum_patrol_strategy(),
         # patrol_strategy=create_oldest_floor_patrol_strategy(),
         gem_collection_strategy=create_gem_collection_strategy(),
         name="CombinedStrategy",

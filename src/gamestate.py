@@ -31,6 +31,7 @@ class GameState:
     known_gems: dict[Coords, Gem] = field(default_factory=dict)
     known_walls: dict[Coords, Wall] = field(default_factory=dict)
     known_floors: dict[Coords, Floor] = field(default_factory=dict)
+    last_known_floor_positions: set[Coords] = field(default_factory=set)
     distance_matrix: dict = field(default_factory=dict)
     path_segments: dict = field(default_factory=dict)
     last_gem_positions: set[Coords] = field(default_factory=set)
@@ -55,6 +56,7 @@ class GameState:
     exploration_points_visited: list[Coords] = field(default_factory=list)
     current_patrol_path: list[Coords] | None = field(default_factory=list)
     floor_graph: dict[Coords, set[Coords]] = field(default_factory=dict)
+    last_floor_graph: dict[Coords, set[Coords]] = field(default_factory=dict)
     graph_articulation_points: set[Coords] = field(default_factory=set)
     graph_bridges: set[tuple[Coords, Coords]] = field(default_factory=set)
     visibility_grid: list[list[bool]] = field(default_factory=list)
@@ -139,12 +141,6 @@ class GameState:
         """
         Select the best patrol points based on dead ends and visibility.
         """
-        assert self.dead_ends, (
-            "Dead ends must be defined before updating patrol points."
-        )
-        assert self.visibility_map, (
-            "Visibility map must be defined before updating patrol points."
-        )
         best_viewpoints = find_viewpoints(
             self.floor_graph, self.visibility_map, self.dead_ends
         )
@@ -173,29 +169,6 @@ class GameState:
             HighlightCoords("patrol_points", list(self.patrol_points), "#00ffff")
         )
 
-    def precompute_patrol_paths(self):
-        """
-        Precompute the shortest paths between all patrol points.
-        """
-        self.path_segments = {}
-        patrol_points = list(self.patrol_points)
-
-        for i, src in enumerate(patrol_points):
-            for j, dst in enumerate(patrol_points):
-                if i != j:
-                    path = get_pre_filled_cached_path(
-                        start=src,
-                        target=dst,
-                        forbidden=self.known_wall_positions,
-                        game_state=self,
-                    )
-                    if path:
-                        self.path_segments[(src, dst)] = path
-        # print(
-        #    f"[GameState] Precomputed {len(self.path_segments)} patrol paths.",
-        #    file=sys.stderr,
-        # )
-
     def update_known_gems(self):
         # Decrease TTL for all known gems
         for pos, gem in list(self.known_gems.items()):
@@ -218,16 +191,38 @@ class GameState:
         """
         Incrementally update the floor graph when new floors are added or removed.
         """
-        for floor in self.known_floor_positions:
-            # Add the new floor as a node
+        current_floors = self.known_floor_positions
+        if current_floors == self.last_known_floor_positions:
+            return  # No change, skip update
+
+        # Remove nodes for floors that disappeared
+        removed = self.last_known_floor_positions - current_floors
+        for floor in removed:
+            self.floor_graph.pop(floor, None)
+            for neighbors in self.floor_graph.values():
+                neighbors.discard(floor)
+
+        # Add nodes for new floors
+        added = current_floors - self.last_known_floor_positions
+        for floor in added:
             self.floor_graph[floor] = set()
-            # Connect to existing neighbors
             for neighbor in get_adjacents(floor):
                 if neighbor in self.floor_graph:
                     self.floor_graph[floor].add(neighbor)
                     self.floor_graph[neighbor].add(floor)
 
+        self.last_known_floor_positions = set(current_floors)
+
     def update_bottleneck_info(self):
+        if self.floor_graph == self.last_floor_graph:
+            highlight_coords.append(
+                HighlightCoords(
+                    "articulation_points",
+                    list(self.graph_articulation_points),
+                    "#ff0000",
+                )
+            )
+            return  # No change, skip update
         self.graph_articulation_points = find_articulation_points(self.floor_graph)
         self.graph_bridges = find_bridges(self.floor_graph)
         if self.debug_mode:
@@ -238,6 +233,17 @@ class GameState:
                     "#ff0000",
                 )
             )
+
+    def update_dead_ends_and_rooms(self):
+        if self.floor_graph == self.last_floor_graph:
+            highlight_coords.append(
+                HighlightCoords("dead_ends", list(self.dead_ends), "#ff00ff")
+            )
+            return  # No change, skip update
+        self.dead_ends = find_dead_ends_and_rooms(self.floor_graph)
+        highlight_coords.append(
+            HighlightCoords("dead_ends", list(self.dead_ends), "#ff00ff")
+        )
 
     def update_known_walls(self):
         for wall in self.wall:
@@ -260,12 +266,6 @@ class GameState:
         self.recent_positions.append(self.bot)
         if len(self.recent_positions) > limit:
             self.recent_positions.pop(0)
-
-    def update_dead_ends_and_rooms(self):
-        self.dead_ends = find_dead_ends_and_rooms(self.floor_graph)
-        highlight_coords.append(
-            HighlightCoords("dead_ends", list(self.dead_ends), "#ff00ff")
-        )
 
     def update_hidden_floors(self) -> list[Coords]:
         width, height = self.config.width, self.config.height
@@ -448,20 +448,25 @@ class GameState:
         """
         self.update_patrol_points()
 
+    def update_graph_info(self):
+        self.update_floor_graph()
+        # self.update_bottleneck_info()
+        self.update_dead_ends_and_rooms()
+
     def refresh(self):
         self.refresh_visibility_map()
         self.update_bot_adjacent_positions()
         self.update_bot_diagonal_adjacent_positions()
         self.check_and_increment_stuck()
         self.update_known_floors()
+        self.update_graph_info()
+
         if self.cave_revealed is False:
-            # self.update_dead_ends_and_rooms()
             self.update_hidden_positions()
             self.update_known_walls()
-            # self.update_floor_graph()
 
         # else:
-        # self.refresh_patrol_data()
+        self.refresh_patrol_data()
         self.update_known_gems()
         self.recalculate_gem_distances()
         self.last_bot_pos = self.bot
